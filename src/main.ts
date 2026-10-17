@@ -1,4 +1,4 @@
-import { LEVELS } from './levels.ts';
+import { LEVELS, CAMPAIGN_LEVEL_COUNT, MAX_ENDLESS_LEVEL, getLevel } from './levels.ts';
 import { MineEngine } from './engine.ts';
 import { MineRenderer } from './renderer.ts';
 import { WIDE_VIEWPORT, type MineViewport } from './viewport.ts';
@@ -17,7 +17,9 @@ const stage=canvas.parentElement!;
 const format=(value:number)=>Math.round(value).toLocaleString('zh-CN');
 const money=(value:number)=>`¥ ${format(value)}`;
 let mode:GameMode='solo';
-let save=loadSave(mode);
+let endless=false;
+let pendingStart=0;
+let save=loadSave(mode,endless);
 const audio=new GameAudio(save.sound);
 let checkpoint:RunCheckpoint=save.checkpoint?{...save.checkpoint}:{levelIndex:0,wallet:0,bombs:0,strength:false,diamondBonus:false,totalEarned:0};
 let engine=new MineEngine(LEVELS[checkpoint.levelIndex],checkpoint);
@@ -33,10 +35,14 @@ let layoutFrame=0;
 let completedMatch:MatchScore|null=null;
 
 function isDuo() {return mode!=='solo';}
+function levelFor(run:RunCheckpoint|ShopSave) {return getLevel(run.levelIndex,endless,run.seed??1);}
+function unit() {return mode==='versus'?'轮':endless?'层':'关';}
+function isFinal() {return checkpoint.levelIndex===(endless?MAX_ENDLESS_LEVEL:CAMPAIGN_LEVEL_COUNT)-1;}
+function stageLabel(index:number) {return `第 ${index+1}${endless?'':` / ${CAMPAIGN_LEVEL_COUNT}`} ${unit()}`;}
 function newEngine(run:RunCheckpoint|ShopSave) {
-  return new MineEngine(LEVELS[run.levelIndex],{...run,playerCount:isDuo()?2:1,...(mode==='versus'?{bombStocks:[1,1] as [number,number]}:{})});
+  return new MineEngine(levelFor(run),{...run,playerCount:isDuo()?2:1,...(mode==='versus'?{bombStocks:[1,1] as [number,number]}:{})});
 }
-function modeChip() {return `<p><span class="mode-chip">${MODE_LABELS[mode]}${isDuo()?' · 同一台设备':''}</span></p>`;}
+function modeChip() {return `<p><span class="mode-chip">${endless?'无尽':'闯关'} · ${MODE_LABELS[mode]}${isDuo()?' · 同一台设备':''}</span></p>`;}
 function controlsText() {
   return isDuo()?(touchControls()?'P1 / P2 分别点击下钩；也可点击矿区左半 / 右半':'P1：S 下钩 / W 炸药 · P2：↓ 下钩 / ↑ 炸药'):
     (touchControls()?'点击「下钩」按钮或矿区':'空格 / ↓ 下钩 · B / ↑ 炸药');
@@ -55,7 +61,11 @@ function syncMode() {
 }
 function selectMode(next:GameMode) {
   if(scene!=='menu'||next===mode)return;
-  persist();const sound=save.sound;mode=next;save=loadSave(mode);save.sound=sound;completedMatch=null;mainMenu();
+  persist();const sound=save.sound;mode=next;save=loadSave(mode,endless);save.sound=sound;completedMatch=null;mainMenu();
+}
+function selectChallenge(next:boolean) {
+  if(scene!=='menu'||next===endless)return;
+  persist();const sound=save.sound;endless=next;save=loadSave(mode,endless);save.sound=sound;completedMatch=null;mainMenu();
 }
 
 function touchControls() {return window.matchMedia('(pointer: coarse)').matches||window.innerWidth<=900;}
@@ -80,7 +90,7 @@ function scheduleViewport() {
 function useCurrentViewport() {engine.setViewport(currentViewport);renderer.setLevel(engine.level);scheduleViewport();}
 
 function persist() {
-  if(!saveGame(save,mode)&&!storageWarning){storageWarning=true;toast('浏览器未允许保存进度，本次仍可继续游玩。');}
+  if(!saveGame(save,mode,endless)&&!storageWarning){storageWarning=true;toast('浏览器未允许保存进度，本次仍可继续游玩。');}
 }
 function toast(text:string) {
   $('toast').textContent=text;$('toast').classList.add('show');
@@ -93,8 +103,9 @@ function stats(items:Array<[string,string]>) {
   return `<div class="stat-grid">${items.map(([label,value])=>`<div class="stat"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>`;
 }
 function mapDots(index:number) {
-  const unit=mode==='versus'?'轮':'关';
-  return `<div class="minimap-levels" aria-label="共20${unit}，当前第${index+1}${unit}">${LEVELS.map((_,i)=>`<span class="minimap-dot ${i<index?'completed':i===index?'current':''}">${i+1}</span>`).join('')}</div>`;
+  const start=endless?Math.max(0,index-3):0;
+  const count=endless?Math.min(7,MAX_ENDLESS_LEVEL-start):CAMPAIGN_LEVEL_COUNT;
+  return `<div class="minimap-levels" aria-label="${endless?'无尽矿场':`共${CAMPAIGN_LEVEL_COUNT}${unit()}`}，当前第${index+1}${unit()}">${Array.from({length:count},(_,offset)=>{const i=start+offset;return `<span class="minimap-dot ${i<index?'completed':i===index?'current':''}">${i+1}</span>`;}).join('')}${endless?'<span class="endless-dots" aria-hidden="true">… ∞</span>':''}</div>`;
 }
 function show(html:string,wide=false) {
   modal.innerHTML=html;
@@ -125,20 +136,22 @@ function mainMenu() {
   const resume=save.shop||save.checkpoint;
   checkpoint=resume?{...resume}:{levelIndex:0,wallet:0,bombs:0,strength:false,diamondBonus:false,totalEarned:0};
   engine=newEngine(checkpoint);useCurrentViewport();
-  show(`${heroArt}${title('GOLDEN VALLEY · EST. 2026','黄金矿工','瞄准那一点金光，把整座矿山的好运带回家。<br>20 关矿场冒险，等你满载而归。')}
-    <div class="menu-feature-line"><span>✦ 经典抓钩</span><span>✦ 关间商店</span><span>✦ 本地存档</span></div>
-    <div class="mode-options" role="group" aria-label="选择游戏模式">${(['solo','coop','versus'] as GameMode[]).map(item=>`<button type="button" class="mode-option ${mode===item?'selected':''}" data-action="mode-${item}" aria-pressed="${mode===item}"><strong>${MODE_LABELS[item]}</strong><small>${item==='solo'?'独自挑战 20 关':item==='coop'?'同屏挖金 · 共同过关':'同屏比拼 · 各自计分'}</small></button>`).join('')}</div>
-    <div class="modal-actions">${resume?button('continue',`继续第 ${resume.levelIndex+1} ${mode==='versus'?'轮':'关'} →`,true):button('new',mode==='solo'?'开始挖金 →':mode==='coop'?'一起挖金 →':'开始对战 →',true)}${resume?button('new','新的挑战'):button('help','怎么玩')}</div>
-    <p class="modal-footer">${MODE_LABELS[mode]} · 最高到达 ${save.highestCleared} / 20 ${mode==='versus'?'轮':'关'} · 最佳累计 ${money(save.bestEarned)}<br>三种模式独立存档 · ${isDuo()?'两人在同一台设备上游玩':'横屏竖屏都能玩'}</p>`);
+  show(`${heroArt}${title('GOLDEN VALLEY · EST. 2026','黄金矿工',`40 关矿场冒险，再向无尽深处出发。<br>${endless?'每次出发生成新矿场，看看你能挖到第几层。':'猪猪、钻石与小精灵，还有会连锁爆炸的 TNT。'}`)}
+    <div class="challenge-options" role="group" aria-label="选择挑战类型"><button type="button" class="challenge-option ${!endless?'selected':''}" data-action="challenge-campaign" aria-pressed="${!endless}">闯关 · 40 关</button><button type="button" class="challenge-option ${endless?'selected':''}" data-action="challenge-endless" aria-pressed="${endless}">无尽 · 随机矿场</button></div>
+    <div class="mode-options" role="group" aria-label="选择游戏模式">${(['solo','coop','versus'] as GameMode[]).map(item=>`<button type="button" class="mode-option ${mode===item?'selected':''}" data-action="mode-${item}" aria-pressed="${mode===item}"><strong>${MODE_LABELS[item]}</strong><small>${item==='solo'?(endless?'逐层挑战 · 失利结算':'独自挑战 40 关'):item==='coop'?'同屏挖金 · 共同过关':'同屏比拼 · 各自计分'}</small></button>`).join('')}</div>
+    <div class="modal-actions">${resume?button('continue',`继续第 ${resume.levelIndex+1} ${unit()} →`,true):button('new',mode==='solo'?'开始挖金 →':mode==='coop'?'一起挖金 →':'开始对战 →',true)}${resume?button('new','新的挑战'):button('help','怎么玩')}</div>
+    ${!endless&&mode!=='versus'?'<button type="button" class="chapter-shortcut" data-action="new-area">新矿区：从第 21 关出发 →</button>':''}
+    <p class="modal-footer">${endless?'无尽':'闯关'} · ${MODE_LABELS[mode]} · ${endless?'已完成':'最高通关'} ${save.highestCleared}${endless?'':` / ${CAMPAIGN_LEVEL_COUNT}`} ${unit()} · 最佳累计 ${money(save.bestEarned)}<br>闯关与无尽、三种人数玩法各自存档 · ${isDuo()?'同一台设备游玩':'横屏竖屏都能玩'}</p>`);
 }
 
-function startNew(force=false) {
+function startNew(force=false,startIndex=0) {
   if(!force&&(save.checkpoint||save.shop)){
+    pendingStart=startIndex;
     scene='confirm';
-    show(`${modeChip()}${title('A NEW ADVENTURE','再出发一次',`开始新的挑战会重置${MODE_LABELS[mode]}的本轮进度。<br>最佳记录和其他模式的存档会继续保留。`)}<div class="modal-actions">${button('force-new',`从第 1 ${mode==='versus'?'轮':'关'}开始`,true)}${button('home','保留进度')}</div>`);return;
+    show(`${modeChip()}${title('A NEW ADVENTURE','再出发一次',`开始新的挑战会重置当前${endless?'无尽':'闯关'} · ${MODE_LABELS[mode]}的本轮进度。<br>最佳记录和其他模式的存档会继续保留。`)}<div class="modal-actions">${button('confirm-new',`从第 ${startIndex+1} ${unit()}开始`,true)}${button('home','保留进度')}</div>`);return;
   }
-  save=clearRun(save);
-  checkpoint={levelIndex:0,wallet:0,bombs:0,strength:false,diamondBonus:false,totalEarned:0};
+  save=clearRun(save,mode,endless);
+  checkpoint={levelIndex:startIndex,wallet:0,bombs:0,strength:false,diamondBonus:false,totalEarned:0,...(endless?{seed:crypto.getRandomValues(new Uint32Array(1))[0]!}:{})};
   if(mode==='versus')checkpoint.match=emptyMatch();
   save.checkpoint={...checkpoint};persist();prepare(checkpoint);
 }
@@ -154,9 +167,9 @@ function prepare(run:RunCheckpoint) {
   useCurrentViewport();scene='ready';audio.setScene('menu');
   reachedGoal=false;lastTick=60;accumulator=0;
   const level=engine.level;
-  show(`<div class="level-badge">第 ${String(level.id).padStart(2,'0')} / 20 ${mode==='versus'?'轮':'关'}</div>${modeChip()}${title('EXPLORE THE MINE',level.name,mode==='versus'?'同一片矿场，各凭本事。60 秒结束后比较收入。':level.subtitle)}
+  show(`<div class="level-badge">${stageLabel(checkpoint.levelIndex)}</div>${modeChip()}${title('EXPLORE THE MINE',level.name,mode==='versus'?'同一片矿场，各凭本事。60 秒结束后比较收入。':level.subtitle)}
     ${mode==='versus'?stats([['P1 累计',money(checkpoint.match?.totals[0]??0)],['P2 累计',money(checkpoint.match?.totals[1]??0)],['本轮炸药','每人 1 枚']]):stats([[mode==='coop'?'共同目标':'本关目标',money(level.target)],['挖矿时间','60 秒'],[mode==='coop'?'共用炸药':'炸药库存',`${checkpoint.bombs} 枚`]])}
-    <p class="ready-buffs">${mode==='versus'?'每轮工具相同，无商店加成；20 轮累计收入更高者获胜。':mode==='coop'?`两人收入合并、钱包和道具共用。${badges(checkpoint)}`:badges(checkpoint)}</p>
+    <p class="ready-buffs">${mode==='versus'?`每轮工具相同，无商店加成；${endless?'持续开采，逐轮累计收入与胜场。':`${CAMPAIGN_LEVEL_COUNT} 轮累计收入更高者获胜。`}`:`${mode==='coop'?'两人收入合并、钱包和道具共用。':''}${badges(checkpoint)}${endless?'<br>无尽挑战：未达目标即结束本次旅程。':''}`}</p>
     <p class="intro-controls">${controlsText()} <span>·</span> 拉回才计分</p>
     ${level.id>1?mapDots(checkpoint.levelIndex):''}
     <div class="modal-actions">${button('play','准备好了，下矿 →',true)}${button('home','返回主菜单')}</div>`);
@@ -177,7 +190,7 @@ function help() {
   if(scene==='playing'){pause();beforeHelp='paused';}else beforeHelp=scene;
   scene='help';audio.setScene('silent');
   show(`${title('A MINER’S HANDBOOK','挖金小手册','时机、重量与一点点运气，就是你的挖矿秘诀。')}
-    ${modeChip()}<ul class="help-list"><li><strong>当前操作：</strong>${controlsText()}。${isDuo()?'支持两人同时下钩。':''}</li><li><strong>双人合作：</strong>两人收入合并达标，共享钱包、炸药和商店增益；两把抓钩都返回后可收工。</li><li><strong>双人对战：</strong>每轮 60 秒，两人各计收入、各有 1 枚炸药。20 轮累计收入更高者获胜；相同则平局。对战没有商店，也不能提前收工。</li><li><strong>抢矿：</strong>先碰到矿物的抓钩获得它，绳索可交叉，不会撞到对方。</li><li><strong>炸药：</strong>只能炸掉自己正在回收的物品。单人 B / ↑，双人 P1 用 W、P2 用 ↑。</li><li><strong>手机横竖屏：</strong>双人模式下点击矿区左半控制 P1、右半控制 P2，或使用各自下钩按钮。转屏会暂停并保留抓钩状态。</li><li><strong>暂停：</strong>Esc / P 或顶部按钮。切换窗口也会自动暂停。</li><li><strong>拉回才入账：</strong>小 / 中 / 大金块 ¥50 / 200 / 500，钻石 ¥600；倒计时结束仍在路上的物品不计收入。</li><li><strong>存档：</strong>三种模式各自保存；刷新或返回菜单后从本关开始时恢复。对战完成一轮后保留累计成绩并进入下一轮。</li></ul>
+    ${modeChip()}<ul class="help-list"><li><strong>当前操作：</strong>${controlsText()}。${isDuo()?'支持两人同时下钩。':''}</li><li><strong>双人玩法：</strong>合作共享目标、钱包和道具；对战各计收入，每人每轮 1 枚炸药，以累计收入比较高低。闯关共 ${CAMPAIGN_LEVEL_COUNT} 轮，无尽可持续较量。先碰到矿物的抓钩获得它。</li><li><strong>猪猪：</strong>在一条横线上来回跑，抓回价值 ¥30。含钻猪猪价值 ¥630（猪 ¥30 + 钻石 ¥600）；钻石增值券下为 ¥930。</li><li><strong>小精灵矿工：</strong>沿固定横线来回挖除遇到的矿物和其他物件。抓回价值 ¥60，被抓住就会停工；已经在抓钩上的物品不受影响。</li><li><strong>TNT 炸药桶：</strong>抓钩碰到或被精灵挖到就爆炸，摧毁附近未被抓住的物件，也会引爆旁边的桶；爆炸没有收入。</li><li><strong>随身炸药：</strong>炸掉自己正在回收的物品，省下时间。单人 B / ↑，双人 P1 用 W、P2 用 ↑。</li><li><strong>手机横竖屏：</strong>双人点击矿区左半控制 P1、右半控制 P2，或使用各自按钮。转屏会暂停并保留抓钩状态。Esc / P 或顶部按钮也可暂停。</li><li><strong>拉回才入账：</strong>小 / 中 / 大金块 ¥50 / 200 / 500，钻石 ¥600；倒计时结束仍在路上的物品不计收入。</li><li><strong>无尽模式：</strong>每次新挑战随机生成矿场，逐层提高目标。单人和合作未达目标会结束本次挑战，保留最佳成绩；对战持续累计每轮成绩。过关后可进入商店（对战除外）。</li><li><strong>存档：</strong>闯关 / 无尽及三种人数玩法共六份独立记录，保存在当前浏览器。刷新后从本关开始时恢复，布局和增益保持；对战保留已完成轮次成绩。</li></ul>
     <div class="modal-actions">${button('help-back','明白了 →',true)}</div>`,true);
 }
 function backFromHelp() {
@@ -196,19 +209,22 @@ function settled() {
     const total=completedMatch.totals[0]+completedMatch.totals[1];
     save.bestEarned=Math.max(save.bestEarned,total);save.highestCleared=Math.max(save.highestCleared,engine.level.id);
     save.shop=null;
-    if(checkpoint.levelIndex===LEVELS.length-1)save=clearRun(save);
-    else save.checkpoint={levelIndex:checkpoint.levelIndex+1,wallet:total,bombs:0,strength:false,diamondBonus:false,totalEarned:total,match:completedMatch};
+    if(isFinal())save=clearRun(save,mode,endless);
+    else save.checkpoint={levelIndex:checkpoint.levelIndex+1,wallet:total,bombs:0,strength:false,diamondBonus:false,totalEarned:total,match:completedMatch,...(checkpoint.seed!==undefined?{seed:checkpoint.seed}:{})};
     persist();
-    if(checkpoint.levelIndex===LEVELS.length-1)showComplete();else showResult();
+    if(isFinal())showComplete();else showResult();
     return;
   }
   if(engine.won){
     const total=checkpoint.totalEarned+engine.income;
     save.bestEarned=Math.max(save.bestEarned,total);save.highestCleared=Math.max(save.highestCleared,engine.level.id);
-    if(checkpoint.levelIndex===LEVELS.length-1){save=clearRun(save);persist();showComplete();return;}
+    if(isFinal()){save=clearRun(save,mode,endless);persist();showComplete();return;}
     save.checkpoint=null;
-    save.shop={levelIndex:checkpoint.levelIndex+1,wallet:checkpoint.wallet+engine.income,bombs:engine.bombs,strength:false,diamondBonus:false,totalEarned:total,purchaseCounts:{bomb:0,strength:0,diamond:0}};
+    save.shop={levelIndex:checkpoint.levelIndex+1,wallet:checkpoint.wallet+engine.income,bombs:engine.bombs,strength:false,diamondBonus:false,totalEarned:total,purchaseCounts:{bomb:0,strength:0,diamond:0},...(checkpoint.seed!==undefined?{seed:checkpoint.seed}:{})};
     persist();
+  }else if(endless){
+    save.bestEarned=Math.max(save.bestEarned,checkpoint.totalEarned+engine.income);
+    save=clearRun(save,mode,endless);persist();
   }
   showResult();
 }
@@ -218,34 +234,34 @@ function showResult() {
     const match=completedMatch!;
     const winner=roundWinner([engine.players[0].income,engine.players[1].income]);
     const label=winner===null?'本轮平局':`P${winner+1} 赢下本轮`;
-    show(`${modeChip()}${title('A FRIENDLY RIVALRY',label,`第 ${engine.level.id} / 20 轮结束，准备下一场较量。`)}
+    show(`${modeChip()}${title('A FRIENDLY RIVALRY',label,`${stageLabel(checkpoint.levelIndex)}结束，准备下一场较量。`)}
       ${stats([['P1 金队 · 本轮',money(engine.players[0].income)],['P2 青队 · 本轮',money(engine.players[1].income)],['本轮结果',winner===null?'平局':`P${winner+1} 胜`]])}
       <p class="ready-buffs">累计收入：P1 ${money(match.totals[0])} · P2 ${money(match.totals[1])}<br>胜场 ${match.wins[0]} : ${match.wins[1]} · 平局 ${match.draws} 轮</p>
       <div class="modal-actions">${button('versus-next','下一轮 →',true)}${button('home','返回主菜单')}</div><p class="modal-footer">累计成绩已保存。下一轮双方各补充 1 枚炸药。</p>`);
     return;
   }
   const win=engine.won;
-  show(`<span class="result-symbol ${win?'success':'failure'}" aria-hidden="true">${win?'✦':'⌛'}</span>${title(win?'A GOOD DAY’S WORK':'ONE MORE TRY',win?'这一趟，满载而归':'就差一点，再试一次',win?`第 ${engine.level.id} 关完成！带上你的收获，去商店看看。`:`还差 <strong>${money(engine.level.target-engine.income)}</strong> 就能过关。<br>优先瞄准钻石和金块，别被沉重的石头拖住。`)}
-    ${stats([['本关收入',money(engine.income)],['目标收入',money(engine.level.target)],[win?'钱包余额':'重试炸药',win?money(checkpoint.wallet+engine.income):`${checkpoint.bombs} 枚`]])}
-    <div class="modal-actions">${win?button('shop','去矿工商店 →',true):button('retry','再试一次 →',true)}${button('home','返回主菜单')}</div>
-    <p class="modal-footer">${win?'消费只扣钱包，不影响累计成绩。':'重试会恢复本关开始时的钱包、炸药与增益，矿物布局保持不变。'}</p>`);
+  show(`<span class="result-symbol ${win?'success':'failure'}" aria-hidden="true">${win?'✦':'⌛'}</span>${modeChip()}${title(win?'A GOOD DAY’S WORK':endless?'THE JOURNEY CONTINUES':'ONE MORE TRY',win?'这一趟，满载而归':endless?'这次旅程，到这里收工':'就差一点，再试一次',win?`第 ${engine.level.id} ${unit()}完成！带上你的收获，去商店看看。`:`还差 <strong>${money(engine.level.target-engine.income)}</strong> 就能过关。<br>${endless?`完成 ${checkpoint.levelIndex} 层 · 本次累计 ${money(checkpoint.totalEarned+engine.income)}`:'优先瞄准钻石和金块，别被沉重的石头拖住。'}`)}
+    ${stats([['本关收入',money(engine.income)],['目标收入',money(engine.level.target)],[win?'钱包余额':endless?'最佳累计':'重试炸药',win?money(checkpoint.wallet+engine.income):endless?money(save.bestEarned):`${checkpoint.bombs} 枚`]])}
+    <div class="modal-actions">${win?button('shop','去矿工商店 →',true):endless?button('force-new','重新挑战第 1 层 →',true):button('retry','再试一次 →',true)}${button('home','返回主菜单')}</div>
+    <p class="modal-footer">${win?'消费只扣钱包，不影响累计成绩。':endless?'本次挑战已结束，最佳累计和已完成层数已保存。':'重试会恢复本关开始时的钱包、炸药与增益，矿物布局保持不变。'}</p>`);
 }
 function showComplete() {
   scene='complete';audio.setScene('menu');
   if(mode==='versus') {
     const match=completedMatch!;
     const winner=roundWinner(match.totals);
-    show(`${modeChip()}${title('TWENTY ROUNDS TOGETHER',winner===null?'旗鼓相当，整场平局':`P${winner+1}，今日矿王！`,'20 轮对战完成，以累计收入决出胜负。')}
+    show(`${modeChip()}${title('A GREAT MATCH',winner===null?'旗鼓相当，整场平局':`P${winner+1}，今日矿王！`,`${engine.level.id} 轮对战完成，以累计收入决出胜负。`)}
       ${stats([['P1 累计',money(match.totals[0])],['P2 累计',money(match.totals[1])],['整场胜者',winner===null?'平局':`P${winner+1}`]])}
       <p class="ready-buffs">P1 获胜 ${match.wins[0]} 轮 · P2 获胜 ${match.wins[1]} 轮 · 平局 ${match.draws} 轮<br>最后一轮：P1 ${money(engine.players[0].income)} · P2 ${money(engine.players[1].income)}</p>
       <div class="modal-actions">${button('force-new','再战一场 →',true)}${button('home','返回主菜单')}</div>`);
     return;
   }
   const total=checkpoint.totalEarned+engine.income;
-  show(`<span class="result-symbol success" aria-hidden="true">♛</span>${title('LEGEND OF GOLDEN VALLEY','传奇矿工，诞生！','20 座矿场，20 次满载而归。<br>你已经把金谷的故事，写进了自己的矿工手册。')}
-    ${stats([['完成关卡','20 / 20'],['累计收入',money(total)],['剩余钱包',money(checkpoint.wallet+engine.income)]])}
-    <div class="minimap-levels">${LEVELS.map(l=>`<span class="minimap-dot completed">${l.id}</span>`).join('')}</div>
-    <div class="modal-actions">${button('force-new','再来一轮 →',true)}${button('home','返回主菜单')}</div><p class="modal-footer">最佳累计收入 ${money(save.bestEarned)} · 记录已自动保存</p>`);
+  show(`<span class="result-symbol success" aria-hidden="true">♛</span>${title('LEGEND OF GOLDEN VALLEY','传奇矿工，诞生！',`${engine.level.id} 座矿场的冒险完成。<br>你已经把金谷的故事，写进了自己的矿工手册。`)}
+    ${stats([['到达终点',`第 ${engine.level.id} ${unit()}`],['累计收入',money(total)],['剩余钱包',money(checkpoint.wallet+engine.income)]])}
+    ${mapDots(checkpoint.levelIndex)}
+    <div class="modal-actions">${button('force-new','再来一轮 →',true)}${!endless?button('try-endless','挑战无尽模式'):''}${button('home','返回主菜单')}</div><p class="modal-footer">最佳累计收入 ${money(save.bestEarned)} · 记录已自动保存</p>`);
 }
 
 const products=[
@@ -258,8 +274,9 @@ function openShop() {
   scene='shop';audio.setScene('shop');
   // Preview the next mine while the merchant is open.
   if(engine.level.id!==shop.levelIndex+1){engine=newEngine(shop);useCurrentViewport();}
-  const hasDiamonds=LEVELS[shop.levelIndex].ores.some(ore=>ore.kind==='diamond');
-  show(`${title('THE MINER’S GENERAL STORE','矿工补给站',`下一站：第 ${shop.levelIndex+1} 关 · ${LEVELS[shop.levelIndex].name}<br>钱包 <strong>${money(shop.wallet)}</strong> <span class="footer-divider">·</span> 炸药库存 ${shop.bombs} / 5`)}
+  const nextMine=levelFor(shop);
+  const hasDiamonds=nextMine.ores.some(ore=>ore.kind==='diamond'||ore.kind==='diamondPig');
+  show(`${modeChip()}${title('THE MINER’S GENERAL STORE','矿工补给站',`下一站：第 ${shop.levelIndex+1} ${unit()} · ${nextMine.name}<br>钱包 <strong>${money(shop.wallet)}</strong> <span class="footer-divider">·</span> 炸药库存 ${shop.bombs} / 5`)}
     <div class="shop-grid">${products.map(p=>{
       const count=shop.purchaseCounts[p.key];
       const sold=count>=p.limit;
@@ -274,7 +291,7 @@ function openShop() {
 function buy(key:'bomb'|'strength'|'diamond') {
   if(scene!=='shop'||!save.shop)return;
   const shop=save.shop,p=products.find(item=>item.key===key)!;
-  if(shop.wallet<p.price||shop.purchaseCounts[key]>=p.limit||(key==='bomb'&&shop.bombs>=5)||(key==='diamond'&&!LEVELS[shop.levelIndex].ores.some(o=>o.kind==='diamond')))return;
+  if(shop.wallet<p.price||shop.purchaseCounts[key]>=p.limit||(key==='bomb'&&shop.bombs>=5)||(key==='diamond'&&!levelFor(shop).ores.some(o=>o.kind==='diamond'||o.kind==='diamondPig')))return;
   shop.wallet-=p.price;shop.purchaseCounts[key]++;
   if(key==='bomb')shop.bombs++;else if(key==='strength')shop.strength=true;else shop.diamondBonus=true;
   persist();audio.play('coin');openShop();toast(`已购买${p.name}`);
@@ -282,7 +299,7 @@ function buy(key:'bomb'|'strength'|'diamond') {
 function nextLevel() {
   if(scene!=='shop'||!save.shop)return;
   const shop=save.shop;
-  prepare({levelIndex:shop.levelIndex,wallet:shop.wallet,bombs:shop.bombs,strength:shop.strength,diamondBonus:shop.diamondBonus,totalEarned:shop.totalEarned});
+  prepare({levelIndex:shop.levelIndex,wallet:shop.wallet,bombs:shop.bombs,strength:shop.strength,diamondBonus:shop.diamondBonus,totalEarned:shop.totalEarned,...(shop.seed!==undefined?{seed:shop.seed}:{})});
 }
 function nextVersus() {if(mode==='versus'&&scene==='result'&&save.checkpoint)prepare(save.checkpoint);}
 
@@ -290,7 +307,7 @@ function updateHud() {
   const shop=scene==='shop'?save.shop:null;
   const playing=scene==='playing';
   $('level-number').textContent=String(engine.level.id).padStart(2,'0');$('level-name').textContent=`${mode==='coop'?'合作 · ':mode==='versus'?'对战 · ':''}${engine.level.name}`;
-  $('level-unit').textContent=mode==='versus'?'/ 20 轮':'/ 20 关';
+  $('level-unit').textContent=endless?`· 无尽${mode==='versus'?'对战':''}`:`/ ${CAMPAIGN_LEVEL_COUNT} ${unit()}`;
   $('income-value').textContent=money(mode==='versus'?engine.players[0].income:engine.income);$('target-value').textContent=money(mode==='versus'?engine.players[1].income:engine.level.target);
   $('wallet-value').textContent=money(mode==='versus'?checkpoint.totalEarned+engine.income:shop?shop.wallet:checkpoint.wallet+engine.income);
   $('time-value').innerHTML=`${Math.ceil(engine.timeLeft)}<span class="time-unit">s</span>`;
@@ -331,7 +348,10 @@ function action(name:string) {
   audio.unlock();if(!name.startsWith('buy-'))audio.play('click');
   switch(name){
     case'mode-solo':selectMode('solo');break;case'mode-coop':selectMode('coop');break;case'mode-versus':selectMode('versus');break;
+    case'challenge-campaign':selectChallenge(false);break;case'challenge-endless':selectChallenge(true);break;
+    case'try-endless':mainMenu();selectChallenge(true);break;
     case'new':startNew();break;case'force-new':startNew(true);break;case'continue':continueRun();break;
+    case'confirm-new':startNew(true,pendingStart);break;case'new-area':if(!endless&&mode!=='versus')startNew(false,20);break;
     case'play':play();break;case'resume':play();break;case'home':mainMenu();break;case'help':help();break;
     case'help-back':backFromHelp();break;case'shop':openShop();break;case'retry':prepare(checkpoint);break;case'next':nextLevel();break;
     case'versus-next':nextVersus();break;
@@ -403,7 +423,7 @@ function frame(now:number) {
     while(accumulator>=1/120&&!engine.ended){engine.update(1/120);accumulator-=1/120;}
     for(const event of engine.drainEvents()){
       renderer.event(event);
-      if(event.type!=='end')audio.play(event.type);
+      if(event.type!=='end')audio.play(event.type==='blast'?'bomb':event.type==='dig'?'rock':event.type);
     }
     if(mode!=='versus'&&!reachedGoal&&engine.income>=engine.level.target){reachedGoal=true;toast(isDuo()?'共同目标达成！两把抓钩回到起点后可以收工。':'目标达成！可以继续挖金，或等抓钩回来后收工。');}
     const second=Math.ceil(engine.timeLeft);

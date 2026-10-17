@@ -1,3 +1,5 @@
+import { CAMPAIGN_LEVEL_COUNT } from './levels.ts';
+
 export type GameMode = 'solo' | 'coop' | 'versus';
 
 export const MODE_LABELS: Record<GameMode, string> = {
@@ -29,12 +31,13 @@ export function scoreRound(previous: MatchScore, incomes: readonly [number, numb
 }
 
 /** Reject partial/corrupt matches rather than inventing a player's missing score. */
-export function readMatch(value: unknown, completedRounds: number): MatchScore | null {
+export function readMatch(value: unknown, completedRounds: number, maxRounds = CAMPAIGN_LEVEL_COUNT, maxMoney = 1_000_000_000): MatchScore | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
   const source = value as Record<string, unknown>;
   const integer = (n: unknown, max: number): n is number => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0 && n <= max;
-  if (!Array.isArray(source.totals) || source.totals.length !== 2 || !source.totals.every(n => integer(n, 1_000_000_000)) ||
-      !Array.isArray(source.wins) || source.wins.length !== 2 || !source.wins.every(n => integer(n, 20)) ||
-      !integer(source.draws, 20) || source.wins[0] + source.wins[1] + source.draws !== completedRounds) return null;
+  if (!integer(completedRounds, maxRounds) ||
+      !Array.isArray(source.totals) || source.totals.length !== 2 || !source.totals.every(n => integer(n, maxMoney)) ||
+      !Array.isArray(source.wins) || source.wins.length !== 2 || !source.wins.every(n => integer(n, maxRounds)) ||
+      !integer(source.draws, maxRounds) || source.wins[0] + source.wins[1] + source.draws !== completedRounds) return null;
   return { totals: [source.totals[0], source.totals[1]], wins: [source.wins[0], source.wins[1]], draws: source.draws };
 }

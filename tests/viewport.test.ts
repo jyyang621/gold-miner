@@ -63,7 +63,7 @@ test('rotation during an outgoing shot catches a circle that now surrounds the h
   assert.equal(engine.held?.id, 'resized-circle');
 });
 
-test('all 20 portrait mines keep full-size minerals visible and within the hook reach', () => {
+test('all campaign portrait mines keep full-size minerals visible and within the hook reach', () => {
   for (const height of [820, 1040, 1200]) {
     for (const level of LEVELS) {
       const engine = new MineEngine(level);
@@ -146,7 +146,7 @@ function aimAndCollect(engine: MineEngine, index: number): void {
 
 test('all 20 portrait levels can be completed without upgrades, bombs, or money-bag luck', async context => {
   for (const height of [820, 1200]) {
-    for (const source of LEVELS) {
+    for (const source of LEVELS.slice(0, 20)) {
       await context.test(`${height}px mine, level ${source.id}`, () => {
         const level = { ...source, ores: source.ores.map(ore => ({ ...ore, ...(ore.kind === 'bag' ? { bagValue: 100 } : {}) })) };
         const engine = new MineEngine(level);

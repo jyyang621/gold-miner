@@ -8,8 +8,8 @@ export const PHYSICS = {
 } as const;
 
 export type HookPhase = 'swing' | 'out' | 'empty' | 'loaded';
-export interface RuntimeOre extends OreDefinition { removed: boolean; held: boolean }
-export interface MineEvent { type: 'launch' | 'grab' | 'coin' | 'rock' | 'bomb' | 'end'; x: number; y: number; value?: number; won?: boolean; player?: 0 | 1 }
+export interface RuntimeOre extends OreDefinition { removed: boolean; held: boolean; motionDirection: 1 | -1 }
+export interface MineEvent { type: 'launch' | 'grab' | 'coin' | 'rock' | 'bomb' | 'blast' | 'dig' | 'end'; x: number; y: number; value?: number; won?: boolean; player?: 0 | 1; radiusX?: number; radiusY?: number }
 export interface MinePlayer {
   id: 0 | 1;
   angle: number;
@@ -26,6 +26,26 @@ export interface MineOptions {
   playerCount?: 1 | 2;
   /** When supplied, each player can only use their own stock (versus mode). */
   bombStocks?: readonly [number, number];
+}
+
+/** Barrel explosions are measured in the original mine, in either orientation. */
+export const BARREL_BLAST_RADIUS = 140;
+const DYNAMIC_STEP = 1 / 120;
+interface MotionSegment { from: number; to: number; x: number; vx: number; direction: 1 | -1 }
+interface MotionPlan { segments: MotionSegment[]; x: number; direction: 1 | -1 }
+
+/** Earliest circle intersection for two linearly moving centres. */
+function circleContact(x: number, y: number, vx: number, vy: number, radius: number, duration: number): number | null {
+  const c = x * x + y * y - radius * radius;
+  if (c <= 1e-8) return 0;
+  const a = vx * vx + vy * vy;
+  if (a <= 1e-16) return null;
+  const b = x * vx + y * vy;
+  if (b >= 0) return null;
+  const discriminant = b * b - a * c;
+  if (discriminant < 0) return null;
+  const time = (-b - Math.sqrt(Math.max(0, discriminant))) / a;
+  return time >= -1e-10 && time <= duration + 1e-10 ? Math.max(0, Math.min(duration, time)) : null;
 }
 
 /** First contact distance along a ray; the rope itself has no collision. */
@@ -54,10 +74,14 @@ export class MineEngine {
   ended = false;
   won = false;
   private events: MineEvent[] = [];
+  private readonly dynamic: boolean;
 
   constructor(level: LevelDefinition, options: MineOptions = {}) {
     this.level = level;
-    this.ores = level.ores.map(ore => ({...ore, removed: false, held: false}));
+    this.ores = level.ores.map(ore => Object.defineProperty({ ...ore, removed: false, held: false }, 'motionDirection', {
+      value: ore.motion?.direction === -1 ? -1 : 1, writable: true,
+    }) as RuntimeOre);
+    this.dynamic = this.ores.some(ore => ore.motion !== undefined || ore.kind === 'barrel' || ore.kind === 'elf');
     this.playerCount = options.playerCount ?? 1;
     this.players = Array.from({ length: this.playerCount }, (_, index) => ({
       id: index as 0 | 1, angle: index === 0 ? -0.85 : 0.85, direction: index === 0 ? 1 : -1,
@@ -111,10 +135,11 @@ export class MineEngine {
     const vectors = this.players.map(player => ({ x: Math.sin(player.angle) * player.rope, y: Math.cos(player.angle) * player.rope }));
     this.viewport = { ...view };
     const geometry = this.geometry;
-    for (const [index, ore] of this.ores.entries()) {
-      const source = this.level.ores[index]!;
-      ore.x = geometry.pivotX + (source.x - PHYSICS.pivotX) * nextScale.x;
-      ore.y = geometry.pivotY + (source.y - PHYSICS.pivotY) * nextScale.y;
+    for (const ore of this.ores) {
+      // Transform the current position, including a walking actor, rather than
+      // restoring its level-start position when the phone rotates.
+      ore.x = geometry.pivotX + (ore.x - before.pivotX) * nextScale.x / oldScale.x;
+      ore.y = geometry.pivotY + (ore.y - before.pivotY) * nextScale.y / oldScale.y;
     }
     for (const player of this.players) {
       const vector = vectors[player.id]!;
@@ -137,6 +162,8 @@ export class MineEngine {
       return { ...event,
         x: to.pivotX + (event.x - from.pivotX) * nextScale.x / oldScale.x,
         y: to.pivotY + (event.y - from.pivotY) * nextScale.y / oldScale.y,
+        ...(event.radiusX === undefined ? {} : { radiusX: event.radiusX * nextScale.x / oldScale.x }),
+        ...(event.radiusY === undefined ? {} : { radiusY: event.radiusY * nextScale.y / oldScale.y }),
       };
     });
   }
@@ -170,6 +197,21 @@ export class MineEngine {
 
   update(delta: number): void {
     if (this.ended || delta <= 0 || !Number.isFinite(delta)) return;
+    if (this.dynamic) {
+      // Large updates use the same small simulation steps as normal play.
+      // The swept contacts below also cover actors crossing between steps.
+      let remaining = Math.min(delta, this.timeLeft);
+      while (remaining > 1e-10 && !this.ended) {
+        const dt = Math.min(DYNAMIC_STEP, remaining);
+        this.updateDynamic(dt);
+        remaining -= dt;
+      }
+      return;
+    }
+    this.updateStatic(delta);
+  }
+
+  private updateStatic(delta: number): void {
     const dt = Math.min(delta, this.timeLeft);
     const outgoing: { player: MinePlayer; next: number; edge: number }[] = [];
     const contacts: { player: MinePlayer; ore: RuntimeOre; distance: number; time: number; order: number }[] = [];
@@ -229,6 +271,192 @@ export class MineEngine {
     }
     this.timeLeft = Math.max(0, this.timeLeft - dt);
     if (this.timeLeft <= 0 || (this.players.every(player => player.phase === 'swing') && this.ores.every(ore => ore.removed))) this.end();
+  }
+
+  private planMotion(ore: RuntimeOre, dt: number): MotionPlan {
+    const motion = ore.motion!;
+    const scale = mineScale(this.viewport).x;
+    const left = this.geometry.pivotX + (motion.left - PHYSICS.pivotX) * scale;
+    const right = this.geometry.pivotX + (motion.right - PHYSICS.pivotX) * scale;
+    const speed = motion.speed * scale;
+    let x = Math.max(left, Math.min(right, ore.x));
+    let direction = ore.motionDirection;
+    if (!(right - left > 1e-8) || !(speed > 0) || !Number.isFinite(speed)) {
+      return { segments: [{ from: 0, to: dt, x: ore.x, vx: 0, direction }], x: ore.x, direction };
+    }
+    let time = 0;
+    const segments: MotionSegment[] = [];
+    while (time < dt - 1e-12) {
+      const distance = direction === 1 ? right - x : x - left;
+      if (distance <= 1e-10) { direction = direction === 1 ? -1 : 1; continue; }
+      const duration = Math.min(dt - time, distance / speed);
+      const vx = speed * direction;
+      segments.push({ from: time, to: time + duration, x, vx, direction });
+      x = Math.max(left, Math.min(right, x + vx * duration));
+      time += duration;
+      if (duration >= distance / speed - 1e-12) direction = direction === 1 ? -1 : 1;
+    }
+    return { segments, x, direction };
+  }
+
+  private positionAt(ore: RuntimeOre, time: number, plans: Map<RuntimeOre, MotionPlan>) {
+    const plan = plans.get(ore);
+    if (!plan) return { x: ore.x, y: ore.y, direction: ore.motionDirection };
+    const segment = plan.segments.find(item => time < item.to - 1e-10);
+    if (!segment) return { x: plan.x, y: ore.y, direction: plan.direction };
+    return { x: segment.x + segment.vx * Math.max(0, time - segment.from), y: ore.y, direction: segment.direction };
+  }
+
+  private hookContact(player: MinePlayer, next: number, ore: RuntimeOre, plans: Map<RuntimeOre, MotionPlan>, dt: number): number | null {
+    const geometry = this.playerGeometry(player.id);
+    const speed = PHYSICS.launchSpeed * geometry.speedScale;
+    const head = this.playerHead(player.id);
+    const vx = Math.sin(player.angle) * speed, vy = Math.cos(player.angle) * speed;
+    const travelTime = Math.min(dt, Math.max(0, next - player.rope) / speed);
+    const segments = plans.get(ore)?.segments ?? [{ from: 0, to: dt, x: ore.x, vx: 0, direction: ore.motionDirection }];
+    let earliest: number | null = null;
+    for (const segment of segments) {
+      const from = segment.from, to = Math.min(travelTime, segment.to);
+      if (from > to + 1e-10) continue;
+      const contact = circleContact(head.x + vx * from - segment.x, head.y + vy * from - ore.y,
+        vx - segment.vx, vy, ore.radius + PHYSICS.headRadius, Math.max(0, to - from));
+      if (contact !== null && (earliest === null || from + contact < earliest)) earliest = from + contact;
+    }
+    return earliest;
+  }
+
+  private elfContact(elf: RuntimeOre, ore: RuntimeOre, plans: Map<RuntimeOre, MotionPlan>, dt: number): number | null {
+    const elfSegments = plans.get(elf)?.segments ?? [{ from: 0, to: dt, x: elf.x, vx: 0, direction: elf.motionDirection }];
+    const oreSegments = plans.get(ore)?.segments ?? [{ from: 0, to: dt, x: ore.x, vx: 0, direction: ore.motionDirection }];
+    let earliest: number | null = null;
+    for (const a of elfSegments) {
+      for (const b of oreSegments) {
+        const from = Math.max(a.from, b.from), to = Math.min(a.to, b.to);
+        if (from > to + 1e-10) continue;
+        const contact = circleContact(a.x + a.vx * (from - a.from) - b.x - b.vx * (from - b.from),
+          elf.y - ore.y, a.vx - b.vx, 0, elf.radius + ore.radius, Math.max(0, to - from));
+        if (contact !== null && (earliest === null || from + contact < earliest)) earliest = from + contact;
+      }
+    }
+    return earliest;
+  }
+
+  private explode(barrel: RuntimeOre, time: number, plans: Map<RuntimeOre, MotionPlan>): void {
+    const scale = mineScale(this.viewport);
+    const queue = [barrel];
+    while (queue.length) {
+      const source = queue.shift()!;
+      if (source.removed || source.held) continue;
+      const centre = this.positionAt(source, time, plans);
+      source.x = centre.x; source.y = centre.y; source.removed = true;
+      this.events.push({ type: 'blast', x: centre.x, y: centre.y,
+        radiusX: BARREL_BLAST_RADIUS * scale.x, radiusY: BARREL_BLAST_RADIUS * scale.y });
+      for (const ore of this.ores) {
+        // A player has already secured anything hanging from a hook.
+        if (ore.removed || ore.held) continue;
+        const position = this.positionAt(ore, time, plans);
+        const distance = Math.hypot((position.x - centre.x) / scale.x, (position.y - centre.y) / scale.y);
+        if (distance > BARREL_BLAST_RADIUS + ore.radius) continue;
+        if (ore.kind === 'barrel') queue.push(ore);
+        else { ore.x = position.x; ore.y = position.y; ore.removed = true; }
+      }
+    }
+  }
+
+  private updateDynamic(dt: number): void {
+    const plans = new Map<RuntimeOre, MotionPlan>();
+    for (const ore of this.ores) {
+      if (!ore.removed && !ore.held && ore.motion) plans.set(ore, this.planMotion(ore, dt));
+    }
+    const outgoing: { player: MinePlayer; next: number; edge: number; speed: number; rope: number }[] = [];
+    type Contact = { kind: 'hook'; player: MinePlayer; ore: RuntimeOre; time: number; order: number } |
+      { kind: 'dig'; elf: RuntimeOre; ore: RuntimeOre; time: number; order: number };
+    const contacts: Contact[] = [];
+    for (const player of this.players) {
+      const geometry = this.playerGeometry(player.id);
+      if (player.phase === 'swing') {
+        player.angle += player.direction * PHYSICS.swingSpeed * dt;
+        if (player.angle > geometry.maxAngle) { player.angle = 2 * geometry.maxAngle - player.angle; player.direction = -1; }
+        if (player.angle < -geometry.maxAngle) { player.angle = -2 * geometry.maxAngle - player.angle; player.direction = 1; }
+      } else if (player.phase === 'out') {
+        const sx = Math.sin(player.angle), cy = Math.cos(player.angle);
+        const edge = Math.min(geometry.maxRope, (geometry.bounds.bottom - geometry.pivotY) / cy,
+          Math.abs(sx) < 0.00001 ? Infinity : (sx > 0 ? geometry.bounds.right - geometry.pivotX : geometry.pivotX - geometry.bounds.left) / Math.abs(sx));
+        const speed = PHYSICS.launchSpeed * geometry.speedScale;
+        const next = Math.max(player.rope, Math.min(edge, player.rope + speed * dt));
+        outgoing.push({ player, next, edge, speed, rope: player.rope });
+        for (const [order, ore] of this.ores.entries()) {
+          if (ore.removed || ore.held) continue;
+          const time = this.hookContact(player, next, ore, plans, dt);
+          if (time !== null) contacts.push({ kind: 'hook', player, ore, time, order });
+        }
+      } else {
+        const speed = player.held ? PHYSICS.carrySpeed / Math.sqrt(ORE_TYPES[player.held.kind].weight) * (this.strength ? 1.35 : 1) : PHYSICS.returnSpeed;
+        player.rope = Math.max(geometry.minRope, player.rope - speed * geometry.speedScale * dt);
+        if (player.rope <= geometry.minRope + 1e-8) {
+          player.rope = geometry.minRope;
+          if (player.held) {
+            const value = oreValue(player.held, this.diamondBonus);
+            this.income += value; player.income += value;
+            player.held.removed = true; player.held.held = false; player.held = null;
+            this.events.push({ type: 'coin', ...this.playerHead(player.id), value, player: player.id });
+          }
+          player.phase = 'swing';
+        }
+      }
+    }
+    for (const elf of this.ores) {
+      if (elf.kind !== 'elf' || elf.removed || elf.held) continue;
+      for (const [order, ore] of this.ores.entries()) {
+        if (ore.kind === 'elf' || ore.removed || ore.held) continue;
+        const time = this.elfContact(elf, ore, plans, dt);
+        if (time !== null) contacts.push({ kind: 'dig', elf, ore, time, order });
+      }
+    }
+    // Hooks and miners share a timeline: grabbing an actor stops its later
+    // mining, and a blast cannot destroy an item that a hook secured first.
+    contacts.sort((a, b) => a.time - b.time ||
+      (a.kind === b.kind ? 0 : a.kind === 'hook' ? -1 : 1) ||
+      (a.kind === 'hook' && b.kind === 'hook' ? a.player.id - b.player.id : 0) || a.order - b.order);
+    for (const contact of contacts) {
+      const { ore, time } = contact;
+      if (ore.removed || ore.held) continue;
+      if (contact.kind === 'hook') {
+        const { player } = contact;
+        if (player.phase !== 'out') continue;
+        const shot = outgoing.find(item => item.player === player)!;
+        player.rope = shot.rope + shot.speed * time;
+        const position = this.positionAt(ore, time, plans);
+        ore.x = position.x; ore.y = position.y; ore.motionDirection = position.direction;
+        if (ore.kind === 'barrel') {
+          player.phase = 'empty';
+          this.explode(ore, time, plans);
+        } else {
+          player.held = ore; ore.held = true; player.phase = 'loaded';
+          this.events.push({ type: ORE_TYPES[ore.kind].value <= 20 ? 'rock' : 'grab', ...this.playerHead(player.id), player: player.id });
+        }
+      } else {
+        if (contact.elf.removed || contact.elf.held) continue;
+        if (ore.kind === 'barrel') this.explode(ore, time, plans);
+        else {
+          const position = this.positionAt(ore, time, plans);
+          ore.x = position.x; ore.y = position.y; ore.removed = true;
+          this.events.push({ type: 'dig', x: position.x, y: position.y });
+        }
+      }
+    }
+    for (const { player, next, edge } of outgoing) {
+      if (player.phase !== 'out') continue;
+      player.rope = next;
+      if (next >= edge) player.phase = 'empty';
+    }
+    for (const [ore, plan] of plans) {
+      if (ore.removed || ore.held) continue;
+      ore.x = plan.x; ore.motionDirection = plan.direction;
+    }
+    this.timeLeft = Math.max(0, this.timeLeft - dt);
+    if (this.timeLeft < 1e-9) this.timeLeft = 0;
+    if (this.timeLeft === 0 || (this.players.every(player => player.phase === 'swing') && this.ores.every(ore => ore.removed))) this.end();
   }
 
   private end(): void {

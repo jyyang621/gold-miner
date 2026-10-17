@@ -61,13 +61,13 @@ test('missing or damaged storage returns a fresh default snapshot', () => {
 test('valid lower and upper bounds survive persistence', () => {
   for (const upper of [false, true]) {
     const edgeRun: RunCheckpoint = {
-      levelIndex: upper ? 19 : 0, wallet: upper ? 1_000_000_000 : 0,
+      levelIndex: upper ? 39 : 0, wallet: upper ? 1_000_000_000 : 0,
       bombs: upper ? 5 : 0, strength: upper, diamondBonus: upper,
       totalEarned: upper ? 1_000_000_000 : 0, seed: upper ? 0xffff_ffff : 0,
     };
     const data = save({
       bestEarned: upper ? 1_000_000_000 : 0,
-      highestCleared: upper ? 20 : 0,
+      highestCleared: upper ? 40 : 0,
       checkpoint: edgeRun,
     });
     assert.equal(saveGame(data), true);
@@ -77,7 +77,7 @@ test('valid lower and upper bounds survive persistence', () => {
 
 test('invalid checkpoint fields discard that run while preserving records', () => {
   const invalid: [string, unknown][] = [
-    ['levelIndex', -1], ['levelIndex', 20], ['levelIndex', 0.5],
+    ['levelIndex', -1], ['levelIndex', 40], ['levelIndex', 0.5],
     ['wallet', -1], ['wallet', 1_000_000_001], ['wallet', '100'],
     ['bombs', -1], ['bombs', 6], ['bombs', 1.5],
     ['strength', 1], ['diamondBonus', 'false'],
@@ -105,7 +105,7 @@ test('invalid optional seeds are omitted without losing a valid checkpoint', () 
 
 test('invalid settings and record values use safe defaults', () => {
   memory.value = JSON.stringify({
-    ...save(), sound: 'off', bestEarned: 1_000_000_001, highestCleared: 21,
+    ...save(), sound: 'off', bestEarned: 1_000_000_001, highestCleared: 41,
   });
   const restored = loadSave();
   assert.equal(restored.sound, true);

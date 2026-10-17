@@ -76,17 +76,25 @@ test('versus requires complete match scores and consistent totals, without erasi
   }
 });
 
-test('twenty scored rounds preserve a complete cumulative result across checkpoint reloads', () => {
+test('forty scored rounds preserve a complete cumulative result across checkpoint reloads', () => {
   let match=emptyMatch();
-  for(let round=0;round<20;round++) {
+  for(let round=0;round<40;round++) {
     const total=match.totals[0]+match.totals[1];
     saveGame({...DEFAULT_SAVE,checkpoint:{levelIndex:round,wallet:total,bombs:0,strength:false,diamondBonus:false,totalEarned:total,match}},'versus');
     const restored=loadSave('versus').checkpoint!;
     assert.equal(restored.levelIndex,round);
     match=scoreRound(restored.match!,[500,200]);
   }
-  assert.deepEqual(match,{totals:[10000,4000],wins:[20,0],draws:0});
-  assert.deepEqual(readMatch(match,20),match);
-  saveGame(clearRun(loadSave('versus')),'versus');
+  assert.deepEqual(match,{totals:[20000,8000],wins:[40,0],draws:0});
+  assert.deepEqual(readMatch(match,40),match);
+  saveGame(clearRun(loadSave('versus'), 'versus'),'versus');
   assert.equal(loadSave('versus').checkpoint,null);
+});
+
+test('match validation uses explicit round and money limits for endless matches', () => {
+  const score = {totals:[5_000_000_000,4_000_000_000],wins:[80,15],draws:5};
+  assert.equal(readMatch(score,100),null);
+  assert.deepEqual(readMatch(score,100,1_000_000,1_000_000_000_000),score);
+  for(const rounds of [-1,.5,1_000_001,Infinity,NaN])assert.equal(readMatch(score,rounds,1_000_000,1_000_000_000_000),null);
+  assert.equal(readMatch({...score,wins:[1_000_001,0]},1_000_001,1_000_000,1_000_000_000_000),null);
 });

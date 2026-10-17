@@ -5,7 +5,11 @@ export type OreKind =
   | 'diamond'
   | 'rockSmall'
   | 'rockLarge'
-  | 'bag';
+  | 'bag'
+  | 'barrel'
+  | 'pig'
+  | 'diamondPig'
+  | 'elf';
 
 export interface OreDefinition {
   id: string;
@@ -14,6 +18,8 @@ export interface OreDefinition {
   y: number;
   radius: number;
   bagValue?: number;
+  /** Horizontal travel limits and speed, expressed in the original 1280 × 720 mine. */
+  motion?: { left: number; right: number; speed: number; direction?: 1 | -1 };
 }
 
 export interface LevelDefinition {
@@ -37,10 +43,15 @@ export const ORE_TYPES: Record<
   rockSmall: { name: '小石头', value: 10, weight: 3, radius: 20 },
   rockLarge: { name: '大石头', value: 20, weight: 7, radius: 34 },
   bag: { name: '神秘钱袋', value: 100, weight: 2, radius: 22 },
+  barrel: { name: '炸药桶', value: 0, weight: 6, radius: 26 },
+  pig: { name: '猪猪', value: 30, weight: 2, radius: 22 },
+  diamondPig: { name: '含钻猪猪', value: 630, weight: 2.2, radius: 24 },
+  elf: { name: '小精灵矿工', value: 60, weight: 2.5, radius: 23 },
 };
 
 export function oreValue(ore: OreDefinition, diamondBonus = false): number {
   if (ore.kind === 'bag') return ore.bagValue ?? ORE_TYPES.bag.value;
+  if (ore.kind === 'diamondPig') return ORE_TYPES.pig.value + ORE_TYPES.diamond.value * (diamondBonus ? 1.5 : 1);
   const value = ORE_TYPES[ore.kind].value;
   return ore.kind === 'diamond' && diamondBonus ? Math.round(value * 1.5) : value;
 }
@@ -87,7 +98,7 @@ const BLUEPRINTS = [
 const PALETTES: LevelDefinition['palette'][] = ['ochre', 'copper', 'emerald', 'deep'];
 const BAG_VALUES = [100, 300, 600] as const;
 
-export const LEVELS: LevelDefinition[] = BLUEPRINTS.map((blueprint, index) => {
+const ORIGINAL_LEVELS: LevelDefinition[] = BLUEPRINTS.map((blueprint, index) => {
   const [name, subtitle, target, layout] = blueprint;
   const id = index + 1;
   const stage = Math.floor(index / 5);
@@ -108,3 +119,123 @@ export const LEVELS: LevelDefinition[] = BLUEPRINTS.map((blueprint, index) => {
   });
   return { id, name, subtitle, target, duration: 60, ores, palette: PALETTES[stage]! };
 });
+
+export const CAMPAIGN_LEVEL_COUNT = 40;
+export const MAX_ENDLESS_LEVEL = 1_000_000;
+
+const EXPANSION_BLUEPRINTS = [
+  ['危险的木桶', '碰到炸药桶会爆炸，先收走周围想要的宝藏。', 1600],
+  ['猪猪散步', '猪猪会来回走动，预判它前进的方向。', 1900],
+  ['闪亮的嘴巴', '含钻猪猪的价值等于猪猪加上一颗钻石。', 2200],
+  ['忙碌的小矿工', '小精灵会挖掉同一横线上的物件，抓住它就能让它停下。', 2500],
+  ['矿洞新伙伴', '金钻在上层，精灵忙着清理下层矿道。', 2800],
+  ['追逐蓝光', '让抓钩与含钻猪猪在途中相遇。', 3000],
+  ['两端的火药', '两侧木桶要小心，中央矿脉更安全。', 3200],
+  ['横行的铲子', '先保护精灵行进路线上的高价宝藏。', 3400],
+  ['猪猪快跑', '猪猪的脚步更快了，抓准出钩的时机。', 3600],
+  ['热闹的矿场', '上层寻金，下层追逐，挑选自己的路线。', 3800],
+  ['铜矿快车', '含钻猪猪轻巧值钱，但不会停下来等你。', 3950],
+  ['精灵巡逻', '一条横线来回巡逻，先观察再下钩。', 4100],
+  ['桶边的宝藏', '爆炸会波及邻近物件，远处的金钻更稳妥。', 4250],
+  ['闪钻牧场', '矿脉和含钻猪猪，选好下一趟收入。', 4400],
+  ['铲尖与钩尖', '抓走精灵，可以保住它还没挖到的物件。', 4500],
+  ['深层运动会', '移动目标也能抓，记得给回收留够时间。', 4600],
+  ['矿道守护者', '先抓移动伙伴，还是先收上层金钻？', 4700],
+  ['地心的火花', '认清炸药桶的位置，安排安全的收矿顺序。', 4800],
+  ['满矿皆星光', '宝藏足够丰富，把握最有价值的每一钩。', 4900],
+  ['新的传奇', '挑战最后的新矿区，再去无尽矿脉继续冒险。', 5000],
+] as const;
+
+const SAFE_COLUMNS = [112, 264, 416, 568, 712, 864, 1016, 1168] as const;
+
+interface ExpansionOptions {
+  id: number;
+  variant: number;
+  mechanics: number;
+  speed: number;
+  random?: () => number;
+}
+
+/**
+ * The two upper shelves remain outside both the elf's row and every barrel's blast.
+ * Only the three lower demonstration prizes can be lost to those hazards.
+ */
+function expansionOres({ id, variant, mechanics, speed, random }: ExpansionOptions): OreDefinition[] {
+  const ores: OreDefinition[] = [];
+  const add = (kind: OreKind, x: number, y: number, motion?: OreDefinition['motion'], bagValue?: number) => {
+    ores.push({ id: `level-${id}-ore-${ores.length + 1}`, kind, x, y, radius: ORE_TYPES[kind].radius,
+      ...(motion ? { motion } : {}), ...(bagValue === undefined ? {} : { bagValue }) });
+  };
+  for (let row = 0; row < 2; row++) {
+    SAFE_COLUMNS.forEach((baseX, column) => {
+      const checker = (row + column + variant) % 2;
+      let kind: OreKind = checker ? 'diamond' : 'goldLarge';
+      // Vary a few treasures without reducing the guaranteed safe value below 8,000.
+      if ((column + variant) % 7 === 0 && row === 1) kind = 'diamond';
+      const x = baseX + (random ? Math.round(random() * 16 - 8) : 0);
+      const y = 330 + row * 100 + (random ? Math.round(random() * 12 - 6) : 0);
+      add(kind, x, y);
+    });
+  }
+
+  add('barrel', variant % 2 ? 112 : 1168, 645);
+  if (mechanics >= 2) {
+    add('pig', 264, 525, { left: 160, right: 560, speed: 34 * speed, direction: 1 });
+  }
+  if (mechanics >= 3) {
+    add('diamondPig', 1016, 525, { left: 720, right: 1120, speed: 39 * speed, direction: -1 });
+  }
+  if (mechanics >= 4) {
+    add('elf', 640, 590, { left: 264, right: 1016, speed: 46 * speed, direction: variant % 2 ? -1 : 1 });
+  }
+  if (variant >= 6) add('barrel', variant % 2 ? 1168 : 112, 645);
+  if (variant >= 8) add('pig', 568, 525, { left: 416, right: 864, speed: 31 * speed, direction: -1 });
+  // These prizes deliberately demonstrate an elf clearing a path and a barrel's reach.
+  add(variant % 3 === 0 ? 'diamond' : 'goldMedium', 416, 590);
+  add(variant % 3 === 1 ? 'bag' : 'rockSmall', 864, 590, undefined, variant % 3 === 1 ? 300 : undefined);
+  add('rockSmall', variant % 2 ? 264 : 1016, 640);
+  return ores;
+}
+
+const EXPANSION_LEVELS: LevelDefinition[] = EXPANSION_BLUEPRINTS.map(([name, subtitle, target], index) => ({
+  id: index + 21, name, subtitle, target, duration: 60,
+  ores: expansionOres({ id: index + 21, variant: index, mechanics: Math.min(4, index + 1), speed: 1 + Math.min(index, 15) * 0.025 }),
+  palette: PALETTES[Math.floor(index / 5)]!,
+}));
+
+export const LEVELS: LevelDefinition[] = [...ORIGINAL_LEVELS, ...EXPANSION_LEVELS];
+
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = Math.imul(state ^ (state >>> 15), 1 | state);
+    value ^= value + Math.imul(value ^ (value >>> 7), 61 | value);
+    return ((value ^ (value >>> 14)) >>> 0) / 0x1_0000_0000;
+  };
+}
+
+/** A bounded 25-item mine: high round numbers never create a denser, impossible grid. */
+export function generateEndlessLevel(index: number, seed: number): LevelDefinition {
+  if (!Number.isInteger(index) || index < 0 || index >= MAX_ENDLESS_LEVEL) {
+    throw new RangeError(`Endless level index must be between 0 and ${MAX_ENDLESS_LEVEL - 1}`);
+  }
+  if (!Number.isFinite(seed)) throw new RangeError('Endless seed must be finite');
+  const random = seededRandom((seed >>> 0) ^ Math.imul(index + 1, 0x9e3779b1));
+  const variant = Math.floor(random() * EXPANSION_BLUEPRINTS.length);
+  const id = index + 1;
+  const target = Math.min(4800, 1000 + Math.floor((Math.log2(index + 1) * 300 + Math.min(index, 100) * 22) / 50) * 50);
+  return {
+    id, name: `无尽矿脉 ${id}`, subtitle: '矿脉每轮变化。桶会爆炸，猪猪会跑，小精灵会清理自己的横线。',
+    target, duration: 60, palette: PALETTES[Math.floor(random() * PALETTES.length)]!,
+    ores: expansionOres({ id, variant, mechanics: 4, speed: 1 + Math.min(index, 40) * 0.02, random }),
+  };
+}
+
+export function getLevel(index: number, endless = false, seed = 1): LevelDefinition {
+  if (endless) return generateEndlessLevel(index, seed);
+  if (!Number.isInteger(index) || index < 0 || index >= LEVELS.length) {
+    throw new RangeError(`Campaign level index must be between 0 and ${LEVELS.length - 1}`);
+  }
+  return LEVELS[index]!;
+}

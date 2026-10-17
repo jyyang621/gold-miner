@@ -244,7 +244,7 @@ test('rotation keeps both outgoing hooks and their pending effects at their own 
   assert.equal(engine.timeLeft, engine.level.duration);
 });
 
-test('every mineral in all 20 mines can be reached by at least one player in both orientations', () => {
+test('every mineral in all campaign mines can be reached by at least one player in both orientations', () => {
   for (const view of [WIDE_VIEWPORT, { width: 720, height: 820, portrait: true }, { width: 720, height: 1200, portrait: true }]) {
     for (const level of LEVELS) {
       const engine = new MineEngine(level, { playerCount: 2 });

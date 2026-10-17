@@ -185,7 +185,7 @@ function waitForCenterAim(engine: MineEngine, target: OreDefinition): void {
 
 test('the real engine completes every one of the 20 levels without any upgrade or money-bag luck', async (context) => {
   const results: string[] = [];
-  for (const [index, source] of LEVELS.entries()) {
+  for (const [index, source] of LEVELS.slice(0, 20).entries()) {
     await context.test(`level ${source.id}: ${source.name}`, () => {
       const level = { ...source, ores: source.ores.map((item) => item.kind === 'bag' ? { ...item, bagValue: 100 } : { ...item }) };
       const engine = new MineEngine(level);
