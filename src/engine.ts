@@ -1,4 +1,5 @@
 import { ORE_TYPES, oreValue, type LevelDefinition, type OreDefinition } from './levels.ts';
+import { WIDE_VIEWPORT, mineGeometry, mineScale, type MineGeometry, type MineViewport } from './viewport.ts';
 
 export const PHYSICS = {
   pivotX: 640, pivotY: 148, minRope: 38, maxRope: 760,
@@ -11,9 +12,9 @@ export interface RuntimeOre extends OreDefinition { removed: boolean; held: bool
 export interface MineEvent { type: 'launch' | 'grab' | 'coin' | 'rock' | 'bomb' | 'end'; x: number; y: number; value?: number; won?: boolean }
 
 /** First contact distance along a ray; the rope itself has no collision. */
-export function rayContact(angle: number, ore: OreDefinition): number | null {
+export function rayContact(angle: number, ore: OreDefinition, geometry: Pick<MineGeometry, 'pivotX' | 'pivotY'> = PHYSICS): number | null {
   const dx = Math.sin(angle), dy = Math.cos(angle);
-  const x = ore.x - PHYSICS.pivotX, y = ore.y - PHYSICS.pivotY;
+  const x = ore.x - geometry.pivotX, y = ore.y - geometry.pivotY;
   const projection = x * dx + y * dy;
   const radius = ore.radius + PHYSICS.headRadius;
   const perpendicularSquared = x * x + y * y - projection * projection;
@@ -24,6 +25,7 @@ export function rayContact(angle: number, ore: OreDefinition): number | null {
 export class MineEngine {
   readonly level: LevelDefinition;
   readonly ores: RuntimeOre[];
+  viewport: MineViewport = { ...WIDE_VIEWPORT };
   angle = -0.85;
   direction = 1;
   rope = PHYSICS.minRope as number;
@@ -47,9 +49,43 @@ export class MineEngine {
     this.diamondBonus = options.diamondBonus ?? false;
   }
 
-  get head() { return {x: PHYSICS.pivotX + Math.sin(this.angle) * this.rope, y: PHYSICS.pivotY + Math.cos(this.angle) * this.rope}; }
+  get geometry() { return mineGeometry(this.viewport); }
+  get head() { const geometry = this.geometry; return {x: geometry.pivotX + Math.sin(this.angle) * this.rope, y: geometry.pivotY + Math.cos(this.angle) * this.rope}; }
   get canFinish() { return !this.ended && this.income >= this.level.target && this.phase === 'swing'; }
   get canBomb() { return !this.ended && this.phase === 'loaded' && this.bombs > 0; }
+
+  /** Change the mine's shape without restarting the active shot or level. */
+  setViewport(view: MineViewport): void {
+    if (!Number.isFinite(view.width) || !Number.isFinite(view.height) || view.width < 320 || view.height < 360) return;
+    if (this.viewport.width === view.width && this.viewport.height === view.height && this.viewport.portrait === view.portrait) return;
+    const before = this.geometry;
+    const oldScale = mineScale(this.viewport), nextScale = mineScale(view);
+    const vector = { x: Math.sin(this.angle) * this.rope, y: Math.cos(this.angle) * this.rope };
+    this.viewport = { ...view };
+    const geometry = this.geometry;
+    for (const [index, ore] of this.ores.entries()) {
+      const source = this.level.ores[index]!;
+      ore.x = geometry.pivotX + (source.x - PHYSICS.pivotX) * nextScale.x;
+      ore.y = geometry.pivotY + (source.y - PHYSICS.pivotY) * nextScale.y;
+    }
+    if (this.phase === 'swing') {
+      // The idle hook stays at the winch; only its aim follows the new aspect.
+      this.angle = Math.atan2(vector.x * nextScale.x / oldScale.x, vector.y * nextScale.y / oldScale.y);
+      this.angle = Math.max(-geometry.maxAngle, Math.min(geometry.maxAngle, this.angle));
+      this.rope = geometry.minRope;
+    } else {
+      const x = vector.x * nextScale.x / oldScale.x;
+      const y = vector.y * nextScale.y / oldScale.y;
+      this.angle = Math.atan2(x, y);
+      this.rope = Math.max(geometry.minRope, Math.hypot(x, y));
+    }
+    // Pending effects follow the same transformation when rotation happens
+    // between the physics update and rendering.
+    this.events = this.events.map(event => ({ ...event,
+      x: geometry.pivotX + (event.x - before.pivotX) * nextScale.x / oldScale.x,
+      y: geometry.pivotY + (event.y - before.pivotY) * nextScale.y / oldScale.y,
+    }));
+  }
 
   launch(): boolean {
     if (this.ended || this.phase !== 'swing') return false;
@@ -78,21 +114,26 @@ export class MineEngine {
   update(delta: number): void {
     if (this.ended || delta <= 0 || !Number.isFinite(delta)) return;
     const dt = Math.min(delta, this.timeLeft);
+    const geometry = this.geometry;
     if (this.phase === 'swing') {
       this.angle += this.direction * PHYSICS.swingSpeed * dt;
-      if (this.angle > PHYSICS.maxAngle) {this.angle = 2 * PHYSICS.maxAngle - this.angle; this.direction = -1;}
-      if (this.angle < -PHYSICS.maxAngle) {this.angle = -2 * PHYSICS.maxAngle - this.angle; this.direction = 1;}
+      if (this.angle > geometry.maxAngle) {this.angle = 2 * geometry.maxAngle - this.angle; this.direction = -1;}
+      if (this.angle < -geometry.maxAngle) {this.angle = -2 * geometry.maxAngle - this.angle; this.direction = 1;}
     } else if (this.phase === 'out') {
       const sx = Math.sin(this.angle), cy = Math.cos(this.angle);
-      const edge = Math.min(PHYSICS.maxRope, (690 - PHYSICS.pivotY) / cy,
-        Math.abs(sx) < 0.00001 ? Infinity : (sx > 0 ? 1252 - PHYSICS.pivotX : PHYSICS.pivotX - 28) / Math.abs(sx));
-      const next = Math.min(edge, this.rope + PHYSICS.launchSpeed * dt);
+      const edge = Math.min(geometry.maxRope, (geometry.bounds.bottom - geometry.pivotY) / cy,
+        Math.abs(sx) < 0.00001 ? Infinity : (sx > 0 ? geometry.bounds.right - geometry.pivotX : geometry.pivotX - geometry.bounds.left) / Math.abs(sx));
+      const next = Math.max(this.rope, Math.min(edge, this.rope + PHYSICS.launchSpeed * geometry.speedScale * dt));
       let first: RuntimeOre | null = null, firstDistance = Infinity;
+      const head = this.head;
       for (const ore of this.ores) {
         if (ore.removed || ore.held) continue;
-        const distance = rayContact(this.angle, ore);
-        if (distance !== null && distance >= this.rope - 0.01 && distance <= next && distance < firstDistance) {
-          first = ore; firstDistance = distance;
+        const distance = rayContact(this.angle, ore, geometry);
+        // Resizing can place the hook inside an expanded collision circle.
+        const inside = Math.hypot(head.x - ore.x, head.y - ore.y) <= ore.radius + PHYSICS.headRadius;
+        const contact = inside ? this.rope : distance;
+        if (contact !== null && contact >= this.rope - 0.01 && contact <= next && contact < firstDistance) {
+          first = ore; firstDistance = contact;
         }
       }
       if (first) {
@@ -105,9 +146,9 @@ export class MineEngine {
       }
     } else {
       const speed = this.held ? PHYSICS.carrySpeed / Math.sqrt(ORE_TYPES[this.held.kind].weight) * (this.strength ? 1.35 : 1) : PHYSICS.returnSpeed;
-      this.rope = Math.max(PHYSICS.minRope, this.rope - speed * dt);
-      if (this.rope <= PHYSICS.minRope + 1e-8) {
-        this.rope = PHYSICS.minRope;
+      this.rope = Math.max(geometry.minRope, this.rope - speed * geometry.speedScale * dt);
+      if (this.rope <= geometry.minRope + 1e-8) {
+        this.rope = geometry.minRope;
         if (this.held) {
           const value = oreValue(this.held, this.diamondBonus);
           this.income += value;
@@ -125,7 +166,7 @@ export class MineEngine {
     if (this.ended) return;
     this.ended = true;
     this.won = this.income >= this.level.target;
-    this.events.push({type:'end', x:640, y:360, won:this.won});
+    this.events.push({type:'end', x:this.viewport.width / 2, y:this.viewport.height / 2, won:this.won});
   }
 
   drainEvents(): MineEvent[] {

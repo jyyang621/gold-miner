@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#30291f" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23362c20'/%3E%3Cpath d='m17 48 31-31M17 16l31 33M29 13c13-4 23-2 28 10-10-3-16-2-22 4z' fill='%23efb93d' stroke='%23efb93d' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E" />
     <meta name="description" content="黄金矿工：抓准时机，满载而归。20 关原创卡通矿场冒险。" />
@@ -20,6 +20,7 @@
         </button>
         <div class="masthead-note"><span class="tiny-star">✦</span> 看准时机，下钩捞金 <span class="tiny-star">✦</span></div>
         <nav class="header-actions" aria-label="游戏设置">
+          <button id="fullscreen-btn" class="utility-button hidden" type="button" aria-label="全屏游戏" title="全屏游戏"><span aria-hidden="true">⛶</span><span>全屏</span></button>
           <button id="sound-btn" class="utility-button" type="button" aria-label="切换声音" title="切换声音"><span aria-hidden="true">♫</span><span>声音开启</span></button>
           <button id="help-btn" class="utility-button" type="button" aria-label="游戏玩法" title="游戏玩法"><span class="question-mark" aria-hidden="true">?</span><span>玩法</span></button>
           <button id="pause-btn" class="utility-button pause-button" type="button" title="暂停游戏（Esc / P）"><span aria-hidden="true">Ⅱ</span><span>暂停</span></button>
@@ -41,7 +42,7 @@
         </section>
 
         <section class="game-stage stage" aria-label="挖矿区域">
-          <canvas id="game-canvas" width="1280" height="720" tabindex="0" aria-label="挖矿画布，按空格或向下方向键发射抓钩，按向上方向键或 B 使用炸药。">你的浏览器需要支持 Canvas 才能运行黄金矿工。</canvas>
+          <canvas id="game-canvas" width="1280" height="720" tabindex="0" aria-label="挖矿画布，点击矿区或下钩按钮发射抓钩；电脑可按空格或向下方向键，按向上方向键或 B 使用炸药。">你的浏览器需要支持 Canvas 才能运行黄金矿工。</canvas>
           <div id="overlay" class="overlay"><div id="modal-content" class="modal-panel" aria-live="polite"></div></div>
           <div id="toast" class="toast" role="status" aria-live="polite"></div>
           <span class="frame-rivet rivet-tl" aria-hidden="true"></span><span class="frame-rivet rivet-tr" aria-hidden="true"></span><span class="frame-rivet rivet-bl" aria-hidden="true"></span><span class="frame-rivet rivet-br" aria-hidden="true"></span>
@@ -50,6 +51,7 @@
         <section class="command-deck" aria-label="操作与道具">
           <div class="keyboard-hints"><span><kbd class="wide-key">SPACE</kbd> / <kbd>↓</kbd> 放下抓钩</span><span><kbd>B</kbd> 使用炸药</span><span><kbd>P</kbd> 暂停</span></div>
           <div class="deck-tools">
+            <button id="launch-btn" class="launch-button" type="button" disabled><span aria-hidden="true">↓</span><span>下钩</span></button>
             <div class="buff-display"><span class="hud-label">本关加成</span><strong id="buff-label">暂无加成</strong></div>
             <button id="bomb-btn" class="bomb-button" type="button" title="使用炸药（B）"><span class="bomb-symbol" aria-hidden="true">✹</span><span>炸药</span><span id="bag-count" class="inventory-count">0</span></button>
             <button id="finish-btn" class="finish-button" type="button" disabled>收工结算 <span aria-hidden="true">↗</span></button>

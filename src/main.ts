@@ -1,6 +1,7 @@
 import { LEVELS } from './levels.ts';
 import { MineEngine } from './engine.ts';
 import { MineRenderer } from './renderer.ts';
+import { WIDE_VIEWPORT, type MineViewport } from './viewport.ts';
 import { GameAudio } from './audio.ts';
 import { loadSave, saveGame, clearRun, type RunCheckpoint, type ShopSave } from './storage.ts';
 
@@ -9,6 +10,8 @@ const $ = <T extends HTMLElement = HTMLElement>(id:string) => document.getElemen
 const canvas=$<HTMLCanvasElement>('game-canvas');
 const overlay=$('overlay'), modal=$('modal-content');
 const pauseButton=$<HTMLButtonElement>('pause-btn'), bombButton=$<HTMLButtonElement>('bomb-btn'), finishButton=$<HTMLButtonElement>('finish-btn');
+const launchButton=$<HTMLButtonElement>('launch-btn'), fullscreenButton=$<HTMLButtonElement>('fullscreen-btn');
+const stage=canvas.parentElement!;
 const format=(value:number)=>Math.round(value).toLocaleString('zh-CN');
 const money=(value:number)=>`¥ ${format(value)}`;
 let save=loadSave();
@@ -22,6 +25,29 @@ let beforeHelp:Scene='menu';
 let lastFrame=performance.now(), elapsed=0, accumulator=0, hudElapsed=0;
 let toastTimer:ReturnType<typeof setTimeout>;
 let lastTick=60, reachedGoal=false, storageWarning=false;
+let currentViewport:MineViewport={...WIDE_VIEWPORT};
+let layoutFrame=0;
+
+function touchControls() {return window.matchMedia('(pointer: coarse)').matches||window.innerWidth<=900;}
+function syncViewport() {
+  const bounds=stage.getBoundingClientRect();
+  if(bounds.width<1||bounds.height<1)return;
+  const portrait=getComputedStyle(stage).getPropertyValue('--mine-portrait').trim()==='1';
+  const width=portrait?720:1280;
+  const viewport:MineViewport={width,height:portrait?Math.max(740,Math.round(width*bounds.height/bounds.width)):720,portrait};
+  const rotated=currentViewport.portrait!==portrait;
+  if(rotated&&scene==='playing')pause('orientation');
+  currentViewport=viewport;
+  engine.setViewport(viewport);
+  renderer.resize(viewport,Math.min(2,(window.devicePixelRatio||1)*bounds.width/width));
+  document.documentElement.dataset.mineLayout=portrait?'portrait':'wide';
+  document.documentElement.classList.toggle('touch-controls',touchControls());
+}
+function scheduleViewport() {
+  cancelAnimationFrame(layoutFrame);
+  layoutFrame=requestAnimationFrame(syncViewport);
+}
+function useCurrentViewport() {engine.setViewport(currentViewport);renderer.setLevel(engine.level);scheduleViewport();}
 
 function persist() {
   if(!saveGame(save)&&!storageWarning){storageWarning=true;toast('浏览器未允许保存进度，本次仍可继续游玩。');}
@@ -66,11 +92,11 @@ function mainMenu() {
   scene='menu';audio.setScene('menu');
   const resume=save.shop||save.checkpoint;
   checkpoint=resume?{...resume}:{levelIndex:0,wallet:0,bombs:0,strength:false,diamondBonus:false,totalEarned:0};
-  engine=new MineEngine(LEVELS[checkpoint.levelIndex],checkpoint);renderer.setLevel(engine.level);
+  engine=new MineEngine(LEVELS[checkpoint.levelIndex],checkpoint);useCurrentViewport();
   show(`${heroArt}${title('GOLDEN VALLEY · EST. 2026','黄金矿工','瞄准那一点金光，把整座矿山的好运带回家。<br>20 关矿场冒险，等你满载而归。')}
     <div class="menu-feature-line"><span>✦ 经典抓钩</span><span>✦ 关间商店</span><span>✦ 本地存档</span></div>
     <div class="modal-actions">${resume?button('continue',`继续第 ${resume.levelIndex+1} 关 →`,true):button('new','开始挖金 →',true)}${resume?button('new','新的挑战'):button('help','怎么玩')}</div>
-    <p class="modal-footer">最高到达 ${save.highestCleared} / 20 关 <span class="footer-divider">·</span> 最佳累计收入 ${money(save.bestEarned)}<br>空格或点击矿区下钩 · 拉回地面才算收入</p>`);
+    <p class="modal-footer">最高到达 ${save.highestCleared} / 20 关 <span class="footer-divider">·</span> 最佳累计收入 ${money(save.bestEarned)}<br>${touchControls()?'点击下钩按钮或矿区 · 横屏竖屏都能玩':'空格或点击矿区下钩 · 拉回地面才算收入'}</p>`);
 }
 
 function startNew(force=false) {
@@ -91,24 +117,24 @@ function prepare(run:RunCheckpoint) {
   checkpoint={...run};
   save.checkpoint={...checkpoint};save.shop=null;persist();
   engine=new MineEngine(LEVELS[checkpoint.levelIndex],checkpoint);
-  renderer.setLevel(engine.level);scene='ready';audio.setScene('menu');
+  useCurrentViewport();scene='ready';audio.setScene('menu');
   reachedGoal=false;lastTick=60;accumulator=0;
   const level=engine.level;
   show(`<div class="level-badge">第 ${String(level.id).padStart(2,'0')} / 20 关</div>${title('EXPLORE THE MINE',level.name,level.subtitle)}
     ${stats([['本关目标',money(level.target)],['挖矿时间','60 秒'],['炸药库存',`${checkpoint.bombs} 枚`]])}
     <p class="ready-buffs">${badges(checkpoint)}</p>
-    ${level.id===1?'<p class="intro-controls"><kbd>SPACE</kbd> / <kbd>↓</kbd> 下钩 <span>·</span> 拉回地面才计分</p>':mapDots(checkpoint.levelIndex)}
+    ${level.id===1?`<p class="intro-controls">${touchControls()?'点击「下钩」按钮或矿区':'<kbd>SPACE</kbd> / <kbd>↓</kbd> 下钩'} <span>·</span> 拉回才计分</p>`:mapDots(checkpoint.levelIndex)}
     <div class="modal-actions">${button('play','准备好了，下矿 →',true)}${button('home','返回主菜单')}</div>`);
 }
 function play() {
   if(scene!=='ready'&&scene!=='paused')return;
   const wasReady=scene==='ready';scene='playing';audio.setScene('game');hide();accumulator=0;lastFrame=performance.now();updateHud();
-  if(wasReady)toast(checkpoint.levelIndex===0?'空格 / ↓ / 点击矿区下钩，拉回地面才算收入。':engine.level.subtitle);
+  if(wasReady)toast(checkpoint.levelIndex===0?(touchControls()?'点击「下钩」或矿区，拉回地面才算收入。':'空格 / ↓ / 点击矿区下钩，拉回地面才算收入。'):engine.level.subtitle);
 }
-function pause(automatic=false) {
+function pause(automatic:boolean|'orientation'=false) {
   if(scene!=='playing')return;
   scene='paused';audio.setScene('silent');
-  show(`${title('TAKE A BREATHER',automatic?'休息一下，时间已暂停':'矿工休息中','矿场、倒计时和道具效果都已暂停。<br>回来后，继续追逐你的下一块黄金。')}
+  show(`${title('TAKE A BREATHER',automatic==='orientation'?'屏幕已切换，继续挖金吧':automatic?'休息一下，时间已暂停':'矿工休息中',automatic==='orientation'?'矿场已适配新方向，当前抓钩和收入都已保留。<br>点击继续，从刚才的地方接着玩。':'矿场、倒计时和道具效果都已暂停。<br>回来后，继续追逐你的下一块黄金。')}
     ${stats([['本关收入',money(engine.income)],['还剩时间',`${Math.ceil(engine.timeLeft)} 秒`],['本关目标',money(engine.level.target)]])}
     <div class="modal-actions">${button('resume','继续挖矿 →',true)}${button('help','查看玩法')}${button('home','返回主菜单')}</div><p class="modal-footer">返回主菜单后，可从本关开始时重新挑战。</p>`);
 }
@@ -116,7 +142,7 @@ function help() {
   if(scene==='playing'){pause();beforeHelp='paused';}else beforeHelp=scene;
   scene='help';audio.setScene('silent');
   show(`${title('A MINER’S HANDBOOK','挖金小手册','时机、重量与一点点运气，就是你的挖矿秘诀。')}
-    <ul class="help-list"><li><strong>空格 / ↓ / 点击矿区：</strong>在抓钩摆动时下钩，一次抓一个物品。</li><li><strong>↑ / B / 炸药按钮：</strong>炸掉正在回收的物品，节省时间；物品不计收入。</li><li><strong>Esc / P：</strong>暂停。切换窗口也会自动暂停，回来后手动继续。</li><li><strong>收入：</strong>小金块 ¥50，中金块 ¥200，大金块 ¥500，钻石 ¥600，钱袋 ¥100 / 300 / 600。</li><li><strong>拉回才入账：</strong>倒计时结束仍在路上的物品不计收入；达标后可继续挖或收工。</li><li><strong>商店与存档：</strong>钱包跨关保留，买道具不扣本关成绩；失败或刷新恢复进关时的状态。</li></ul>
+    <ul class="help-list"><li><strong>下钩按钮 / 点击矿区：</strong>在抓钩摆动时下钩；电脑也可按空格或 ↓。</li><li><strong>炸药按钮：</strong>炸掉正在回收的物品，节省时间；电脑也可按 ↑ 或 B。</li><li><strong>手机横竖屏：</strong>矿场自动适配。切换方向会暂停，点击继续就能接着本关玩。</li><li><strong>暂停按钮 / Esc / P：</strong>切换窗口也会自动暂停，回来后手动继续。</li><li><strong>收入：</strong>小金块 ¥50，中金块 ¥200，大金块 ¥500，钻石 ¥600，钱袋 ¥100 / 300 / 600。</li><li><strong>拉回才入账：</strong>倒计时结束仍在路上的物品不计收入；达标后可继续挖或收工。</li><li><strong>商店与存档：</strong>钱包跨关保留，买道具不扣本关成绩；失败或刷新恢复进关时的状态。</li></ul>
     <div class="modal-actions">${button('help-back','明白了 →',true)}</div>`,true);
 }
 function backFromHelp() {
@@ -166,7 +192,7 @@ function openShop() {
   const shop=save.shop;if(!shop){continueRun();return;}
   scene='shop';audio.setScene('shop');
   // Preview the next mine while the merchant is open.
-  if(engine.level.id!==shop.levelIndex+1){engine=new MineEngine(LEVELS[shop.levelIndex],shop);renderer.setLevel(engine.level);}
+  if(engine.level.id!==shop.levelIndex+1){engine=new MineEngine(LEVELS[shop.levelIndex],shop);useCurrentViewport();}
   const hasDiamonds=LEVELS[shop.levelIndex].ores.some(ore=>ore.kind==='diamond');
   show(`${title('THE MINER’S GENERAL STORE','矿工补给站',`下一站：第 ${shop.levelIndex+1} 关 · ${LEVELS[shop.levelIndex].name}<br>钱包 <strong>${money(shop.wallet)}</strong> <span class="footer-divider">·</span> 炸药库存 ${shop.bombs} / 5`)}
     <div class="shop-grid">${products.map(p=>{
@@ -209,13 +235,20 @@ function updateHud() {
   $('bag-count').textContent=String(shop?shop.bombs:engine.bombs);
   $('buff-label').textContent=[(shop?.strength??engine.strength)?'力量 +35%':'',(shop?.diamondBonus??engine.diamondBonus)?'钻石 +50%':''].filter(Boolean).join(' · ')||'暂无加成';
   bombButton.disabled=!playing||!engine.canBomb;finishButton.disabled=!playing||!engine.canFinish;
+  launchButton.disabled=!playing||engine.phase!=='swing';
+  const launchLabel=engine.phase==='out'?'下钩中':engine.phase==='swing'?'下钩':'回收中';
+  launchButton.innerHTML=`<span aria-hidden="true">↓</span><span>${launchLabel}</span>`;
+  launchButton.setAttribute('aria-label',launchLabel==='下钩'?'下钩':`抓钩${launchLabel}`);
+  fullscreenButton.classList.toggle('hidden',!document.fullscreenEnabled||!touchControls());
+  fullscreenButton.innerHTML=`<span aria-hidden="true">⛶</span><span>${document.fullscreenElement?'退出全屏':'全屏'}</span>`;
+  fullscreenButton.setAttribute('aria-label',document.fullscreenElement?'退出全屏':'全屏游戏');
   finishButton.title=engine.income>=engine.level.target?'抓钩回到起点后可收工':'收入达标后可收工';
   pauseButton.disabled=scene!=='playing'&&scene!=='paused';
   pauseButton.innerHTML=scene==='paused'?'<span aria-hidden="true">▶</span><span>继续</span>':'<span aria-hidden="true">Ⅱ</span><span>暂停</span>';
   $('sound-btn').innerHTML=`<span aria-hidden="true">${save.sound?'♫':'♪'}</span><span>${save.sound?'声音开启':'声音关闭'}</span>`;
   $('sound-btn').setAttribute('aria-pressed',String(save.sound));
 }
-function launch() {if(scene==='playing')engine.launch();}
+function launch() {if(scene==='playing'&&engine.launch())updateHud();}
 function useBomb() {if(scene==='playing'){if(!engine.bomb())toast(engine.bombs===0?'没有炸药了，过关后可在商店补给。':'抓到物品、正在回收时才能使用炸药。');}}
 function action(name:string) {
   audio.unlock();if(!name.startsWith('buy-'))audio.play('click');
@@ -228,13 +261,22 @@ function action(name:string) {
 }
 
 modal.addEventListener('click',event=>{const target=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-action]');if(target&&!target.disabled)action(target.dataset.action!);});
-canvas.addEventListener('pointerdown',event=>{if(event.button!==0)return;event.preventDefault();audio.unlock();canvas.focus({preventScroll:true});launch();});
+canvas.addEventListener('pointerdown',event=>{if(event.button!==0||!event.isPrimary)return;event.preventDefault();audio.unlock();if(event.pointerType!=='touch')canvas.focus({preventScroll:true});launch();});
+launchButton.addEventListener('pointerdown',event=>{if(event.button!==0||!event.isPrimary)return;event.preventDefault();audio.unlock();launch();});
+launchButton.addEventListener('click',event=>{if(event.detail===0){audio.unlock();launch();}});
 bombButton.addEventListener('click',()=>{audio.unlock();useBomb();});
 finishButton.addEventListener('click',()=>{audio.unlock();if(scene==='playing')engine.finish();});
 pauseButton.addEventListener('click',()=>{audio.unlock();if(scene==='paused')play();else pause();});
 $('home-btn').addEventListener('click',()=>{audio.unlock();audio.play('click');mainMenu();});
 $('help-btn').addEventListener('click',()=>{audio.unlock();if(scene==='help')backFromHelp();else help();});
 $('sound-btn').addEventListener('click',()=>{save.sound=!save.sound;audio.setEnabled(save.sound);audio.unlock();audio.setScene(scene==='playing'?'game':scene==='shop'?'shop':scene==='paused'||scene==='help'?'silent':'menu');persist();updateHud();});
+fullscreenButton.addEventListener('click',async()=>{
+  audio.unlock();
+  try {
+    if(document.fullscreenElement)await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen({navigationUI:'hide'});
+  }catch{toast('当前浏览器未开启全屏，横屏或竖屏仍可正常游玩。');}
+});
 
 document.addEventListener('keydown',event=>{
   // Keep keyboard navigation inside the active dialog.
@@ -263,6 +305,10 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)background(
 window.addEventListener('blur',background);
 window.addEventListener('focus',foreground);
 window.addEventListener('pagehide',()=>{persist();audio.setScene('silent');});
+new ResizeObserver(scheduleViewport).observe(stage);
+window.addEventListener('resize',scheduleViewport);
+window.visualViewport?.addEventListener('resize',scheduleViewport);
+document.addEventListener('fullscreenchange',()=>{scheduleViewport();updateHud();});
 
 function frame(now:number) {
   const dt=Math.min(.1,Math.max(0,(now-lastFrame)/1000));lastFrame=now;
@@ -284,4 +330,4 @@ function frame(now:number) {
   hudElapsed+=dt;if(hudElapsed>=.08){updateHud();hudElapsed=0;}requestAnimationFrame(frame);
 }
 
-mainMenu();requestAnimationFrame(frame);
+mainMenu();syncViewport();requestAnimationFrame(frame);

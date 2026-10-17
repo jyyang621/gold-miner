@@ -15,7 +15,7 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 350px; background: #ece2cc; color: var(--ink); background-image: repeating-linear-gradient(115deg, transparent, transparent 8px, #6c533805 8px, #6c533805 9px); }
+body { margin: 0; min-width: 320px; background: #ece2cc; color: var(--ink); background-image: repeating-linear-gradient(115deg, transparent, transparent 8px, #6c533805 8px, #6c533805 9px); }
 button, input { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; cursor: pointer; }
 button:focus-visible, canvas:focus-visible, a:focus-visible { outline: 3px solid #b35e32; outline-offset: 5px; }
@@ -68,8 +68,8 @@ button, a { touch-action: manipulation; }
 #time-value.danger, .time-display.danger #time-value { color: #bd4f36; animation: timer-pulse 1s ease-in-out infinite; }
 @keyframes timer-pulse { 50% { opacity: .6; } }
 
-.game-stage { position: relative; aspect-ratio: 16 / 9; isolation: isolate; background: #68472c; overflow: hidden; }
-#game-canvas { display: block; width: 100%; height: 100%; touch-action: none; outline-offset: -5px; }
+.game-stage { --mine-portrait: 0; position: relative; aspect-ratio: 16 / 9; isolation: isolate; background: #68472c; overflow: hidden; }
+#game-canvas { display: block; width: 100%; height: 100%; object-fit: contain; touch-action: none; outline-offset: -5px; }
 .frame-rivet { position: absolute; z-index: 8; width: 7px; height: 7px; border-radius: 50%; border: 1px solid #372c21; background: #9d794f; box-shadow: inset 0 1px #c5a373; pointer-events: none; }
 .frame-rivet::after { content: ""; display: block; width: 3px; height: 1px; background: #4d3926; transform: rotate(-30deg); position: absolute; left: 1px; top: 2px; }
 .rivet-tl { top: 8px; left: 8px; }.rivet-tr { top: 8px; right: 8px; }.rivet-bl { bottom: 8px; left: 8px; }.rivet-br { bottom: 8px; right: 8px; }
@@ -79,6 +79,10 @@ button, a { touch-action: manipulation; }
 kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 23px; padding: 0 5px; font: 700 10px ui-monospace, "Consolas", monospace; color: #806a4d; background: #fcf6e7; border: 1px solid #d9c7a5; border-radius: 4px; box-shadow: 0 2px 0 #dac8a5; }
 .wide-key { min-width: 49px; font-size: 8px; letter-spacing: .5px; }
 .deck-tools { display: flex; align-items: center; gap: 11px; }
+.launch-button { display: none; align-items: center; justify-content: center; gap: 8px; min-height: 50px; min-width: 110px; padding: 10px 20px; border: 1px solid #8f6422; border-radius: 8px; background: linear-gradient(#ffdd7b, #efb83b); color: #553613; font-size: 18px; font-weight: 850; box-shadow: 0 3px 0 #ae7d2e, inset 0 1px #fff3bf; }
+.launch-button > span:first-child { font-size: 23px; line-height: 1; }
+.launch-button:disabled { color: #8b734e; background: #e7d8b7; border-color: #c6b18a; box-shadow: none; }
+.launch-button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #ae7d2e; }
 .buff-display { text-align: right; padding-right: 9px; max-width: 190px; }
 .buff-display .hud-label { font-size: 9px; }
 .buff-display strong { display: block; margin-top: 1px; color: #897452; font-size: 11px; font-weight: 650; }
@@ -157,54 +161,263 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .intro-controls > span { margin-inline: 4px; }
 .ready-modal .minimap-levels { max-width: 100%; gap: 4px; margin-top: 12px; }
 .ready-modal .minimap-dot { width: 19px; height: 19px; font-size: 7px; }
-@media (max-width: 900px) {
-  .menu-modal { padding: 21px 25px 18px; }
-  .menu-modal .hero-art { max-width: 180px; margin-bottom: 8px; }
-  .menu-modal .hero-art svg { max-height: 66px; }
-  .menu-modal .modal-description { margin: 9px auto 12px; line-height: 1.7; }
-  .menu-modal .modal-actions { margin-top: 13px; }
-  .menu-modal .modal-footer { margin-top: 15px; padding-top: 10px; font-size: 9px; }
-  .ready-modal .stat-grid { margin-block: 13px; }
-  .ready-modal .stat { padding: 9px 6px; }
-  .ready-modal .stat > strong { font-size: 20px; }
-  .ready-modal .how-grid { margin-block: 12px; }
-  .ready-modal .how-step { padding-block: 7px; }
-  .ready-modal .how-step > span:first-child { display: none; }
-  .ready-modal .modal-footer { margin-top: 12px; padding-top: 9px; font-size: 9px; }
-  .menu-feature-line { gap: 15px; font-size: 9px; }
+/* Tablet and laptop desks retain the original compact, wide layout. */
+@media (min-width: 1500px) and (min-height: 980px) {
+  .masthead { min-height: 124px; }
+  .page-shell { padding-inline: 36px; }
+  .page-footer { padding-top: 27px; }
 }
-
-@media (min-width: 1500px) and (min-height: 980px) { .masthead { min-height: 124px; } .page-shell { padding-inline: 36px; } .page-footer { padding-top: 27px; } }
-@media (max-width: 1180px) { .page-shell { padding-inline: 27px; } .masthead-note { display: none; } .status-strip { column-gap: 17px; padding: 17px 22px; grid-template-columns: 1.05fr 1.85fr .95fr .8fr; } .goal-display { padding-inline: 18px; } .goal-numbers { flex-wrap: wrap; gap: 0; margin-bottom: 6px; } .target-number { margin-left: auto; } .goal-numbers .income-number { font-size: 20px; } .goal-numbers .hud-label { gap: 7px; } .keyboard-hints { gap: 13px; } .keyboard-hints > span:last-child { display: none; } .command-deck { padding-inline: 20px; gap: 13px; } .buff-display { max-width: 130px; } .wallet-display, .time-display { gap: 9px; } .level-name { font-size: 16px; } }
-@media (max-width: 900px) { .page-shell { padding-inline: 18px; } .masthead { min-height: 88px; } .brand-mark { width: 43px; height: 48px; } .brand-mark svg { width: 33px; height: 33px; } .brand-wordmark > strong { font-size: 24px; } .brand-wordmark small { font-size: 7px; letter-spacing: 1.8px; } .status-strip { min-height: 82px; padding: 13px 17px; column-gap: 12px; grid-template-columns: 1fr 1.6fr .9fr .7fr; } .level-stamp { display: none; } .goal-display { padding-inline: 14px; } .coin-icon { width: 25px; height: 25px; font-size: 14px; } .wallet-display strong { font-size: 18px; } #time-value { font-size: 23px; } .clock-icon { display: none; } .keyboard-hints { gap: 10px; } .keyboard-hints > span:nth-child(2) { display: none; } .buff-display { display: none; } .command-deck { padding: 11px 16px; min-height: 63px; } .modal-panel { padding: 28px 30px 23px; } .overlay { padding: 18px; } .hero-art { max-width: 250px; } .hero-art svg { max-height: 135px; } .modal-title { font-size: 29px; } .modal-description { margin: 11px auto 17px; font-size: 11px; } .modal-actions { margin-top: 16px; } .page-footer { font-size: 8px; } }
-@media (max-width: 640px) { .page-shell { padding-inline: 9px; } .masthead { min-height: 80px; gap: 10px; } .brand { gap: 8px; } .brand-wordmark > strong { font-size: 21px; letter-spacing: 1px; } .brand-wordmark small { font-size: 6px; letter-spacing: 1px; margin-top: 5px; } .brand-mark { width: 36px; height: 40px; border-radius: 4px 4px 13px 13px; } .brand-mark svg { width: 28px; height: 28px; } .header-actions { gap: 1px; } .utility-button { width: 32px; min-height: 32px; padding: 5px; } .utility-button > span + span { display: none; } .pause-button { margin-left: 3px; width: 34px; } .game-shell { border-radius: 8px; } .status-strip { grid-template-columns: 1.1fr 1.8fr .85fr; min-height: 76px; padding: 11px 12px; gap: 10px; } .goal-display { padding: 0 10px; border-right: 0; } .hud-label { font-size: 8px; } .level-name { font-size: 12px; margin-top: 4px; } .goal-numbers .hud-label { font-size: 8px; } .goal-numbers .income-number { font-size: 16px; } .target-number { font-size: 8px; } .target-number strong { font-size: 9px; margin-left: 2px; } .goal-track { height: 6px; } .wallet-display { display: none; } .time-display { gap: 0; border-left: 1px dashed #d6c49e; } #time-value { font-size: 22px; } .command-deck { flex-wrap: wrap; gap: 10px; justify-content: center; padding: 11px 10px 12px; } .keyboard-hints { font-size: 9px; justify-content: center; } .keyboard-hints > span { gap: 5px; } .deck-tools { margin-left: auto; gap: 7px; } .bomb-button { min-height: 31px; padding: 4px 7px; font-size: 10px; gap: 4px; } .bomb-symbol { font-size: 19px; } .finish-button { min-height: 33px; padding: 6px 9px; font-size: 10px; gap: 7px; } .page-footer { gap: 6px; padding: 17px 2px 22px; font-size: 7px; letter-spacing: 0; flex-wrap: wrap; } .footer-motto { display: none !important; } .overlay { padding: 12px; } .modal-panel { padding: 23px 20px 20px; border-radius: 7px; } .modal-panel::before, .modal-panel::after { top: 12px; font-size: 9px; } .modal-panel::before { left: 13px; } .modal-panel::after { right: 13px; } .modal-eyebrow { font-size: 8px; letter-spacing: 2px; margin-bottom: 8px; } .modal-title { font-size: 25px; } .hero-art { max-width: 200px; } .hero-art svg { max-height: 100px; } .hero-icon { font-size: 34px; } .modal-description { font-size: 10px; line-height: 1.8; margin: 10px auto 14px; } .button { min-height: 37px; padding: 8px 16px; font-size: 11px; } .modal-actions { gap: 9px; margin-top: 14px; } .modal-footer { margin-top: 17px; padding-top: 10px; font-size: 8px; } .stat-grid { gap: 6px; margin-block: 14px; } .stat { padding: 10px 5px; font-size: 8px; } .stat > strong { font-size: 19px; } .shop-grid { gap: 6px; margin-top: 14px; } .shop-item { padding: 10px 7px; } .shop-item h3, .shop-item h4 { font-size: 10px; } .shop-item p { font-size: 8px; } .shop-item > .shop-icon, .shop-item > .item-icon { min-height: 28px; font-size: 22px; margin-bottom: 7px; } .shop-price { font-size: 13px; } .shop-buy { font-size: 9px; min-height: 28px; padding: 5px 7px; } .how-grid { gap: 7px; margin: 15px 0; } .how-step { padding: 10px 6px; font-size: 8px; } .how-step strong { font-size: 10px; } .help-list { font-size: 10px; margin-block: 13px; } .toast { top: 14px; font-size: 10px; padding: 8px 13px; } }
-@media (max-width: 420px) { .keyboard-hints .wide-key { min-width: 39px; font-size: 7px; } .keyboard-hints { font-size: 8px; } .keyboard-hints kbd { min-width: 19px; height: 21px; } .deck-tools { gap: 5px; } .bomb-button { font-size: 9px; } .finish-button { font-size: 9px; padding-inline: 7px; } .inventory-count { min-width: 16px; height: 16px; font-size: 9px; } .level-name { font-size: 11px; } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
-
-/* Fit the entire mining desk on common laptop displays. */
-@media (min-width: 641px) and (max-height: 850px) {
+@media (max-width: 1180px) {
+  .page-shell { padding-inline: 27px; }
+  .masthead-note { display: none; }
+  .status-strip { column-gap: 17px; padding: 17px 22px; grid-template-columns: 1.05fr 1.85fr .95fr .8fr; }
+  .goal-display { padding-inline: 18px; }
+  .goal-numbers { flex-wrap: wrap; gap: 0; margin-bottom: 6px; }
+  .target-number { margin-left: auto; }
+  .goal-numbers .income-number { font-size: 20px; }
+  .goal-numbers .hud-label { gap: 7px; }
+  .keyboard-hints { gap: 13px; }
+  .keyboard-hints > span:last-child { display: none; }
+  .command-deck { padding-inline: 20px; gap: 13px; }
+  .buff-display { max-width: 130px; }
+  .wallet-display, .time-display { gap: 9px; }
+  .level-name { font-size: 16px; }
+}
+@media (min-width: 901px) and (max-height: 850px) {
   .page-shell { width: min(1440px, 100%, calc((100dvh - 260px) * 16 / 9 + 40px)); padding-inline: 20px; }
   .masthead { min-height: 74px; gap: 12px; }
   .masthead-note { display: none; }
-  .brand { gap: 9px; }.brand-mark { width: 39px; height: 44px; }.brand-mark svg { width: 30px; height: 30px; }
-  .brand-wordmark > strong { font-size: 23px; }.brand-wordmark small { font-size: 7px; letter-spacing: 1.4px; }
-  .utility-button { padding: 6px 8px; font-size: 11px; }.header-actions { gap: 3px; }
+  .brand { gap: 9px; }
+  .brand-mark { width: 39px; height: 44px; }
+  .brand-mark svg { width: 30px; height: 30px; }
+  .brand-wordmark > strong { font-size: 23px; }
+  .brand-wordmark small { font-size: 7px; letter-spacing: 1.4px; }
+  .utility-button { padding: 6px 8px; font-size: 11px; }
+  .header-actions { gap: 3px; }
   .status-strip { min-height: 76px; padding: 12px 16px; column-gap: 12px; grid-template-columns: 1fr 1.8fr .9fr .7fr; }
-  .level-stamp, .clock-icon { display: none; }.level-name { font-size: 14px; }
-  .goal-display { padding-inline: 13px; }.goal-numbers { gap: 7px; margin-bottom: 6px; }
-  .goal-numbers .income-number { font-size: 20px; }.hud-label { font-size: 9px; }
-  .wallet-display, .time-display { gap: 8px; }.wallet-display strong { font-size: 19px; }#time-value { font-size: 23px; }
-  .command-deck { min-height: 58px; padding: 9px 14px; gap: 10px; }.keyboard-hints { gap: 9px; font-size: 9px; }
-  .keyboard-hints > span:last-child, .buff-display { display: none; }.deck-tools { gap: 8px; }
-  .page-footer { padding: 15px 2px; font-size: 8px; }.footer-motto { display: none !important; }
-  .modal-panel { padding: 23px 28px 20px; }.modal-title { font-size: 30px; }.modal-description { margin: 10px auto 15px; }
-  .menu-modal .hero-art { max-width: 190px; margin-bottom: 8px; }.menu-modal .hero-art svg { max-height: 70px; }
+  .level-stamp, .clock-icon { display: none; }
+  .level-name { font-size: 14px; }
+  .goal-display { padding-inline: 13px; }
+  .goal-numbers { gap: 7px; margin-bottom: 6px; }
+  .goal-numbers .income-number { font-size: 20px; }
+  .hud-label { font-size: 9px; }
+  .wallet-display, .time-display { gap: 8px; }
+  .wallet-display strong { font-size: 19px; }
+  #time-value { font-size: 23px; }
+  .command-deck { min-height: 58px; padding: 9px 14px; gap: 10px; }
+  .keyboard-hints { gap: 9px; font-size: 9px; }
+  .keyboard-hints > span:last-child, .buff-display { display: none; }
+  .deck-tools { gap: 8px; }
+  .page-footer { padding: 15px 2px; font-size: 8px; }
+  .footer-motto { display: none; }
+  .modal-panel { padding: 23px 28px 20px; }
+  .modal-title { font-size: 30px; }
+  .modal-description { margin: 10px auto 15px; }
+  .menu-modal .hero-art { max-width: 190px; margin-bottom: 8px; }
+  .menu-modal .hero-art svg { max-height: 70px; }
   .menu-modal .modal-footer { margin-top: 14px; padding-top: 10px; }
-  .stat-grid { margin-block: 14px; }.stat { padding-block: 9px; }.stat > strong { font-size: 21px; }
-  .how-grid { margin-block: 13px; }.how-step { padding-block: 8px; }.how-step > span:first-child { display: none; }
-  .modal-footer { margin-top: 13px; padding-top: 11px; }.modal-actions { margin-top: 15px; }
-  .ready-modal { padding-block: 20px; }.ready-modal .level-badge { margin-bottom: 6px; }
+  .stat-grid { margin-block: 14px; }
+  .stat { padding-block: 9px; }
+  .stat > strong { font-size: 21px; }
+  .how-grid { margin-block: 13px; }
+  .how-step { padding-block: 8px; }
+  .how-step > span:first-child { display: none; }
+  .modal-footer { margin-top: 13px; padding-top: 11px; }
+  .modal-actions { margin-top: 15px; }
+  .ready-modal { padding-block: 20px; }
+  .ready-modal .level-badge { margin-bottom: 6px; }
   .ready-modal .modal-description { margin: 8px auto 12px; }
   .ready-modal .ready-buffs { margin-block: 9px; }
   .ready-modal .modal-actions { margin-top: 12px; }
+}
+@media (max-width: 900px) {
+  .page-shell { padding-inline: 18px; }
+  .masthead { min-height: 78px; }
+  .brand-mark { width: 43px; height: 48px; }
+  .brand-mark svg { width: 33px; height: 33px; }
+  .brand-wordmark > strong { font-size: 24px; }
+  .brand-wordmark small { font-size: 8px; letter-spacing: 1.4px; }
+  .status-strip { min-height: 82px; padding: 13px 17px; column-gap: 12px; grid-template-columns: 1fr 1.6fr .9fr .7fr; }
+  .level-stamp, .clock-icon, .keyboard-hints, .buff-display { display: none; }
+  .goal-display { padding-inline: 14px; }
+  .coin-icon { width: 25px; height: 25px; font-size: 14px; }
+  .wallet-display strong { font-size: 18px; }
+  #time-value { font-size: 23px; }
+  .command-deck { padding: 10px 14px; min-height: 70px; }
+  .deck-tools { width: 100%; gap: 9px; }
+  .launch-button { display: flex; margin-right: auto; }
+  .bomb-button, .finish-button { min-height: 48px; padding-inline: 13px; font-size: 14px; }
+  .page-footer { font-size: 9px; }
+}
+@media (any-pointer: coarse) {
+  .launch-button { display: flex; }
+  .utility-button { min-height: 44px; }
+  .bomb-button, .finish-button { min-height: 48px; }
+  .keyboard-hints { display: none; }
+  .command-deck { justify-content: flex-end; }
+}
+
+/* On phones the viewport is a complete play surface, including both safe areas. */
+@media (max-width: 900px) and (orientation: portrait), (max-height: 600px) and (orientation: landscape) {
+  html, body { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
+  .page-shell { display: flex; flex-direction: column; width: 100%; height: 100svh; height: 100dvh; padding: env(safe-area-inset-top, 0px) max(6px, env(safe-area-inset-right, 0px)) max(6px, env(safe-area-inset-bottom, 0px)) max(6px, env(safe-area-inset-left, 0px)); }
+  .masthead { flex: 0 0 52px; min-height: 52px; gap: 5px; }
+  .brand { gap: 7px; min-width: 0; min-height: 44px; }
+  .brand-mark { width: 29px; height: 33px; border-radius: 4px 4px 10px 10px; box-shadow: inset 0 0 0 2px #766048, 0 2px 0 #c6b591; }
+  .brand-mark svg { width: 24px; height: 24px; }
+  .brand-wordmark > strong { font-size: 20px; letter-spacing: 1px; white-space: nowrap; }
+  .brand-wordmark small { display: none; }
+  .masthead-note, .page-footer { display: none; }
+  .header-actions { gap: 0; }
+  .utility-button { width: 42px; min-width: 42px; min-height: 44px; padding: 5px; }
+  .utility-button > span + span { display: none; }
+  .utility-button > span:first-child { font-size: 21px; }
+  .pause-button { margin-left: 1px; padding-inline: 5px; }
+  .game-shell { flex: 1 1 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; border-radius: 8px; box-shadow: 0 3px 0 #c1ac84; }
+  .game-stage { min-height: 0; min-width: 0; isolation: auto; }
+  #game-canvas { touch-action: manipulation; }
+  .keyboard-hints, .buff-display { display: none; }
+  .command-deck { min-height: 68px; padding: 8px; gap: 0; }
+  .deck-tools { width: 100%; margin: 0; gap: 8px; }
+  .launch-button { display: flex; flex: 1 1 0; min-width: 0; min-height: 50px; margin: 0; padding: 10px; font-size: 18px; }
+  .bomb-button, .finish-button { flex: 0 0 auto; min-height: 48px; padding: 9px 12px; font-size: 14px; gap: 6px; border-radius: 7px; }
+  .inventory-count { min-width: 22px; height: 22px; font-size: 12px; }
+  .finish-button > span { display: none; }
+  .frame-rivet { width: 5px; height: 5px; }
+  .rivet-tl, .rivet-tr { top: 5px; }
+  .rivet-bl, .rivet-br { bottom: 5px; }
+  .rivet-tl, .rivet-bl { left: 5px; }
+  .rivet-tr, .rivet-br { right: 5px; }
+  .toast { top: 12px; max-width: calc(100% - 24px); font-size: 13px; padding: 10px 14px; }
+
+  /* Dialogs use the viewport rather than the smaller canvas. */
+  .overlay { position: fixed; inset: 0; z-index: 30; padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); overflow: hidden; background: #2b2118b0; }
+  .modal-panel { width: min(600px, 100%); max-height: 100%; padding: 24px 20px 18px; border-radius: 9px; scroll-padding-block: 14px; }
+  .wide-modal { width: min(690px, 100%); }
+  .modal-eyebrow { font-size: 10px; letter-spacing: 2px; margin-bottom: 8px; }
+  .modal-title { font-size: clamp(26px, 6vw, 34px); letter-spacing: 1px; }
+  .modal-description { margin: 12px auto 18px; font-size: 14px; line-height: 1.8; }
+  .modal-panel::before, .modal-panel::after { top: 12px; font-size: 10px; }
+  .hero-art, .menu-modal .hero-art { width: 200px; max-width: 75%; margin: 0 auto 8px; }
+  .hero-art svg, .menu-modal .hero-art svg { max-height: 74px; }
+  .hero-icon { font-size: 38px; }
+  .menu-feature-line { gap: 12px; font-size: 12px; letter-spacing: 0; }
+  .intro-controls { font-size: 12px; flex-wrap: wrap; gap: 5px; }
+  .modal-actions { position: sticky; bottom: -18px; z-index: 2; display: flex; flex-wrap: wrap; gap: 10px; margin: 18px -4px 0; padding: 12px 4px 4px; background: #fff7e4; box-shadow: 0 -8px 12px #fff7e4de; }
+  .button { min-height: 48px; padding: 11px 17px; font-size: 16px; letter-spacing: 0; }
+  .button-primary { flex: 1 1 100%; }
+  .modal-footer { margin-top: 15px; padding-top: 12px; font-size: 12px; line-height: 1.7; }
+  .stat-grid { gap: 8px; margin: 16px 0; }
+  .stat { padding: 11px 6px; font-size: 12px; }
+  .stat > strong { font-size: 22px; }
+  .level-badge { margin-bottom: 10px; font-size: 12px; }
+  .ready-buffs { font-size: 12px; line-height: 1.7; }
+  .minimap-levels { margin-top: 14px; }
+  .ready-modal .minimap-dot { width: 22px; height: 22px; font-size: 9px; }
+  .how-grid { gap: 8px; margin-block: 16px; }
+  .how-step { padding: 12px 7px; font-size: 12px; }
+  .how-step strong { font-size: 13px; }
+  .how-step > span:first-child { display: none; }
+  .help-list { margin-block: 16px; font-size: 14px; line-height: 1.8; }
+  .shop-item h3, .shop-item h4 { font-size: 15px; }
+  .shop-item p { font-size: 12px; }
+  .shop-price { font-size: 18px; }
+  .shop-buy { min-height: 44px; font-size: 14px; }
+  .shop-limit { font-size: 12px; }
+}
+@media (max-width: 900px) and (orientation: portrait) {
+  .status-strip { grid-template-columns: 1.25fr 1fr .85fr; grid-template-areas: "level wallet time" "goal goal goal"; gap: 8px 10px; padding: 10px 12px; min-height: 92px; }
+  .level-display { grid-area: level; gap: 0; }
+  .level-display .hud-label { white-space: nowrap; }
+  .level-name { margin-top: 0; font-size: 13px; line-height: 1.35; }
+  .hud-label { font-size: 11px; letter-spacing: 0; line-height: 1.4; }
+  .wallet-display { grid-area: wallet; justify-content: center; gap: 0; }
+  .coin-icon { display: none; }
+  .wallet-display strong { font-size: 17px; line-height: 1.3; }
+  .time-display { grid-area: time; justify-content: flex-end; gap: 0; border-left: 1px dashed #d6c49e; }
+  .time-display > div { text-align: right; }
+  #time-value { font-size: 23px; line-height: 1.2; }
+  .time-unit { font-size: 12px; margin-left: 2px; }
+  .goal-display { grid-area: goal; padding: 0; border: 0; }
+  .goal-numbers { flex-wrap: nowrap; align-items: baseline; margin-bottom: 5px; gap: 10px; }
+  .goal-numbers .hud-label { font-size: 12px; gap: 8px; }
+  .goal-numbers .income-number { font-size: 18px; }
+  .target-number { margin-left: auto; font-size: 12px; }
+  .target-number strong { margin-left: 4px; font-size: 14px; }
+  .goal-track { height: 6px; }
+  .game-stage { --mine-portrait: 1; aspect-ratio: auto; width: 100%; height: 100%; }
+  .shop-grid { grid-template-columns: 1fr; gap: 10px; margin-top: 16px; }
+  .shop-item { display: grid; grid-template-columns: 35px minmax(0, 1fr) 84px; grid-template-rows: auto auto auto; align-items: center; gap: 4px 10px; padding: 13px 12px; text-align: left; }
+  .shop-item > .shop-icon, .shop-item > .item-icon { grid-column: 1; grid-row: 1 / 4; align-self: center; min-height: 0; margin: 0; font-size: 28px; text-align: center; }
+  .shop-item h3, .shop-item h4 { grid-column: 2; grid-row: 1; margin: 0; }
+  .shop-item p { grid-column: 2; grid-row: 2; margin: 0; line-height: 1.6; }
+  .shop-price { grid-column: 3; grid-row: 1; margin: 0; text-align: center; }
+  .shop-buy { grid-column: 3; grid-row: 2 / 4; padding-inline: 4px; }
+  .shop-limit { grid-column: 2; grid-row: 3; margin: 0; font-size: 11px; }
+}
+@media (max-width: 380px) and (orientation: portrait) {
+  .brand { gap: 5px; }
+  .brand-mark { width: 26px; height: 30px; }
+  .brand-wordmark > strong { font-size: 18px; }
+  .utility-button { width: 38px; min-width: 38px; }
+  .status-strip { padding-inline: 10px; column-gap: 7px; }
+  .command-deck { padding: 8px 6px; }
+  .deck-tools { gap: 6px; }
+  .bomb-button, .finish-button { padding-inline: 9px; font-size: 13px; }
+  .launch-button { padding-inline: 8px; font-size: 17px; }
+  .modal-panel { padding-inline: 16px; }
+  .shop-item { grid-template-columns: 28px minmax(0, 1fr) 78px; gap: 4px 8px; padding-inline: 9px; }
+}
+
+/* A short landscape screen keeps a wide mine and a thumb-sized side deck. */
+@media (max-height: 600px) and (orientation: landscape) {
+  .page-shell { padding-inline: max(4px, env(safe-area-inset-left, 0px)) max(4px, env(safe-area-inset-right, 0px)); padding-bottom: max(4px, env(safe-area-inset-bottom, 0px)); }
+  .masthead { flex-basis: 44px; min-height: 44px; }
+  .brand-mark { width: 25px; height: 28px; }
+  .brand-mark svg { width: 21px; height: 21px; }
+  .brand-wordmark > strong { font-size: 18px; }
+  .utility-button { width: 44px; min-width: 44px; }
+  .game-shell { grid-template-columns: minmax(0, 1fr) 108px; grid-template-rows: 42px minmax(0, 1fr); border-width: 1px; }
+  .status-strip { grid-column: 1 / -1; grid-row: 1; min-height: 0; grid-template-columns: 1.05fr 2.3fr 1fr .9fr; padding: 5px 12px; gap: 12px; border-bottom-width: 1px; }
+  .level-stamp, .level-name, .coin-icon, .clock-icon { display: none; }
+  .hud-label { font-size: 11px; letter-spacing: 0; line-height: 1.3; }
+  .goal-display { padding-inline: 12px; }
+  .goal-numbers { flex-wrap: nowrap; gap: 10px; margin-bottom: 3px; }
+  .goal-numbers .hud-label { gap: 6px; font-size: 10px; }
+  .goal-numbers .income-number { font-size: 17px; }
+  .target-number { margin-left: auto; font-size: 10px; }
+  .target-number strong { font-size: 12px; margin-left: 3px; }
+  .goal-track { height: 4px; }
+  .wallet-display, .time-display { gap: 0; justify-content: center; }
+  .wallet-display strong { font-size: 17px; }
+  #time-value { font-size: 19px; }
+  .time-unit { font-size: 11px; }
+  .game-stage { grid-column: 1; grid-row: 2; align-self: center; justify-self: center; width: min(100%, calc((100dvh - 92px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 16 / 9)); height: auto; max-height: 100%; aspect-ratio: 16 / 9; }
+  .command-deck { grid-column: 2; grid-row: 2; align-self: stretch; min-height: 0; padding: 10px 8px; border-top: 0; border-left: 1px solid var(--ink); justify-content: center; }
+  .deck-tools { flex-direction: column; justify-content: center; gap: 10px; height: 100%; }
+  .launch-button { flex: 0 0 auto; width: 100%; min-height: 70px; flex-direction: column; gap: 3px; font-size: 17px; }
+  .bomb-button, .finish-button { width: 100%; min-height: 46px; padding: 8px 3px; font-size: 13px; }
+  .modal-panel { padding: 18px 24px 14px; }
+  .modal-panel::before, .modal-panel::after { top: 9px; }
+  .modal-eyebrow { margin-bottom: 5px; }
+  .modal-title { font-size: 26px; }
+  .modal-description { margin: 9px auto 12px; font-size: 13px; line-height: 1.65; }
+  .hero-art, .menu-modal .hero-art { display: none; }
+  .menu-feature-line { font-size: 12px; }
+  .modal-actions { flex-wrap: nowrap; margin-top: 12px; bottom: -14px; padding-top: 10px; }
+  .button-primary { flex: 0 1 auto; }
+  .modal-footer { margin-top: 12px; padding-top: 10px; }
+  .stat-grid, .how-grid { margin-block: 12px; }
+  .stat { padding-block: 8px; }
+  .stat > strong { margin-top: 2px; font-size: 20px; }
+  .shop-grid { gap: 9px; margin-top: 12px; }
+  .shop-item { padding: 11px 9px; }
+  .shop-item > .shop-icon, .shop-item > .item-icon { min-height: 28px; margin-bottom: 5px; font-size: 25px; }
+  .shop-item h3, .shop-item h4 { margin-bottom: 4px; }
+  .shop-item p { margin-bottom: 8px; }
+  .shop-price { margin-bottom: 7px; font-size: 16px; }
+  .shop-limit { margin-top: 7px; font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
