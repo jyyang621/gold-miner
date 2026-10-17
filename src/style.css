@@ -68,7 +68,7 @@ button, a { touch-action: manipulation; }
 #time-value.danger, .time-display.danger #time-value { color: #bd4f36; animation: timer-pulse 1s ease-in-out infinite; }
 @keyframes timer-pulse { 50% { opacity: .6; } }
 
-.game-stage { --mine-portrait: 0; position: relative; aspect-ratio: 16 / 9; isolation: isolate; background: #68472c; overflow: hidden; }
+.game-stage { --mine-portrait: 0; position: relative; aspect-ratio: 16 / 9; isolation: auto; background: #68472c; overflow: hidden; }
 #game-canvas { display: block; width: 100%; height: 100%; object-fit: contain; touch-action: none; outline-offset: -5px; }
 .frame-rivet { position: absolute; z-index: 8; width: 7px; height: 7px; border-radius: 50%; border: 1px solid #372c21; background: #9d794f; box-shadow: inset 0 1px #c5a373; pointer-events: none; }
 .frame-rivet::after { content: ""; display: block; width: 3px; height: 1px; background: #4d3926; transform: rotate(-30deg); position: absolute; left: 1px; top: 2px; }
@@ -79,6 +79,8 @@ button, a { touch-action: manipulation; }
 kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 23px; padding: 0 5px; font: 700 10px ui-monospace, "Consolas", monospace; color: #806a4d; background: #fcf6e7; border: 1px solid #d9c7a5; border-radius: 4px; box-shadow: 0 2px 0 #dac8a5; }
 .wide-key { min-width: 49px; font-size: 8px; letter-spacing: .5px; }
 .deck-tools { display: flex; align-items: center; gap: 11px; }
+.player-controls { display: contents; }
+.duo-only { display: none; }
 .launch-button { display: none; align-items: center; justify-content: center; gap: 8px; min-height: 50px; min-width: 110px; padding: 10px 20px; border: 1px solid #8f6422; border-radius: 8px; background: linear-gradient(#ffdd7b, #efb83b); color: #553613; font-size: 18px; font-weight: 850; box-shadow: 0 3px 0 #ae7d2e, inset 0 1px #fff3bf; }
 .launch-button > span:first-child { font-size: 23px; line-height: 1; }
 .launch-button:disabled { color: #8b734e; background: #e7d8b7; border-color: #c6b18a; box-shadow: none; }
@@ -100,7 +102,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .footer-motto { letter-spacing: 2px; color: #907951; }
 .footer-motto span { margin-left: 6px; color: #b58f46; }
 
-.overlay { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; padding: 24px; background: #2b21185c; backdrop-filter: blur(3px); overflow-y: auto; overscroll-behavior: contain; }
+.overlay { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 24px; background: #2b21185c; backdrop-filter: blur(3px); overflow-y: auto; overscroll-behavior: contain; }
 .overlay.hidden { display: none; }
 .modal-panel { position: relative; width: min(600px, 100%); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 34px 40px 28px; background: #fff7e4; border: 2px solid #4c3825; border-radius: 10px; box-shadow: 0 5px 0 #5a402b, 0 15px 55px #25160d52, inset 0 0 0 5px #fff7e4, inset 0 0 0 6px #dfcba4; text-align: center; scrollbar-width: thin; scrollbar-color: #c5aa79 #f3e4c7; }
 .modal-panel::before { content: "✦"; display: block; position: absolute; top: 14px; left: 20px; color: #c8a667; font-size: 12px; }
@@ -417,6 +419,85 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
   .shop-item p { margin-bottom: 8px; }
   .shop-price { margin-bottom: 7px; font-size: 16px; }
   .shop-limit { margin-top: 7px; font-size: 11px; }
+}
+/* Players share one mine while keeping separate, simultaneous controls. */
+.mode-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 18px auto 0; max-width: 480px; }
+.mode-option { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; min-height: 62px; padding: 10px 8px; border: 1px solid #d6bf91; border-radius: 7px; background: #fcf0d6; color: #806445; font-size: 13px; font-weight: 800; line-height: 1.4; }
+.mode-option strong { font-size: inherit; }
+.mode-option small { font-size: 10px; font-weight: 500; color: #a08760; line-height: 1.45; }
+.mode-option:hover { background: #f8e5b8; }
+.mode-option.selected, .mode-option[aria-pressed="true"] { border-color: #ac7b2c; background: #f5d17d; color: #654518; box-shadow: inset 0 0 0 1px #ac7b2c; }
+.mode-option.selected small, .mode-option[aria-pressed="true"] small { color: #8d6930; }
+.mode-chip { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 4px 9px; border: 1px solid #b4c9af; border-radius: 20px; background: #e8eed9; color: #59785b; font-size: 11px; font-weight: 750; line-height: 1.4; vertical-align: middle; }
+.versus-mode .mode-chip { border-color: #b4c7bf; background: #e5eee9; color: #467b70; }
+.duo-mode .command-deck { min-height: 100px; }
+.duo-mode .keyboard-hints, .duo-mode .buff-display { display: none; }
+.duo-mode .deck-tools { width: 100%; gap: 12px; }
+.duo-mode .player-controls { --player-color: #99702d; --player-line: #d6b46e; --player-wash: #fcf0d2; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; flex: 1 1 0; min-width: 0; gap: 6px 8px; padding: 8px; border: 1px solid var(--player-line); border-radius: 8px; background: var(--player-wash); }
+.duo-mode .player-two { --player-color: #397d70; --player-line: #9bbfb2; --player-wash: #e8f0e6; }
+.duo-mode .player-meta { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; color: var(--player-color); font-size: 11px; line-height: 1.2; }
+.player-tag { font-weight: 900; letter-spacing: .4px; white-space: nowrap; }
+.player-tag > span { font-size: 10px; font-weight: 650; letter-spacing: 0; }
+.player-meta > strong { font-size: 12px; font-weight: 850; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.duo-mode .launch-button { grid-column: 1; display: flex; min-width: 0; min-height: 48px; margin: 0; padding: 8px 12px; font-size: 16px; touch-action: none; }
+.duo-mode .launch-button > span:first-child { font-size: 21px; }
+.duo-mode .bomb-button { grid-column: 2; min-height: 44px; padding: 7px 10px; touch-action: none; }
+.duo-mode .finish-button { flex: 0 0 auto; min-height: 44px; }
+.duo-mode .player-two .launch-button { color: #245d52; border-color: #478a79; background: linear-gradient(#bfe5cc, #7ac4ad); box-shadow: 0 3px 0 #4e8f7b, inset 0 1px #e7f7e9; }
+.duo-mode .player-two .launch-button:active:not(:disabled) { box-shadow: 0 1px 0 #4e8f7b; }
+.duo-mode .player-two .launch-button:disabled { color: #718d7d; border-color: #b3c4b7; background: #d5e1d4; box-shadow: none; }
+.duo-mode .player-two .bomb-button { border-color: #a5bfae; background: #e4eddd; color: #537764; }
+.duo-mode .player-two .inventory-count { background: #c7ddca; color: #50735e; }
+.versus-mode .finish-button, .versus-mode .buff-display { display: none; }
+@media (min-width: 901px) and (min-height: 601px) and (max-height: 850px) {
+  .duo-mode .page-shell { width: min(1440px, 100%, calc((100dvh - 304px) * 16 / 9 + 40px)); }
+  .duo-mode .command-deck { padding-block: 8px; min-height: 100px; }
+}
+@media (max-width: 900px) and (orientation: portrait) {
+  .mode-options { gap: 6px; margin-top: 15px; }
+  .mode-option { min-height: 66px; padding: 9px 5px; font-size: 13px; }
+  .mode-option small { font-size: 10px; }
+  .mode-chip { font-size: 12px; }
+  .duo-mode .command-deck { min-height: 0; padding: 7px; }
+  .duo-mode .deck-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .duo-mode .player-controls { grid-template-columns: minmax(0, 1fr) 48px; padding: 6px; gap: 6px; }
+  .duo-mode .player-meta { gap: 3px; font-size: 11px; }
+  .duo-mode .player-tag > span { font-size: 9px; }
+  .duo-mode .player-meta > strong { font-size: 11px; }
+  .duo-mode .launch-button { min-height: 50px; gap: 4px; padding: 7px 3px; font-size: 15px; }
+  .duo-mode .launch-button > span:first-child { font-size: 20px; }
+  .duo-mode .bomb-button { width: 48px; min-height: 48px; gap: 2px; padding: 5px 2px; }
+  .duo-mode .bomb-button > span:nth-child(2) { display: none; }
+  .duo-mode .bomb-symbol { font-size: 20px; }
+  .duo-mode .inventory-count { min-width: 18px; height: 20px; padding: 0 3px; font-size: 11px; }
+  .duo-mode .finish-button { grid-column: 1 / -1; width: 100%; min-height: 44px; padding-block: 8px; font-size: 13px; }
+}
+@media (max-width: 380px) and (orientation: portrait) {
+  .mode-options { gap: 5px; }
+  .mode-option { font-size: 12px; }
+  .mode-option small { font-size: 9px; }
+  .duo-mode .command-deck { padding-inline: 5px; }
+  .duo-mode .deck-tools { gap: 5px; }
+  .duo-mode .player-controls { padding-inline: 5px; gap: 5px; }
+  .duo-mode .launch-button { font-size: 14px; }
+}
+@media (max-height: 600px) and (orientation: landscape) {
+  .mode-options { margin-top: 12px; max-width: 480px; }
+  .mode-option { min-height: 52px; padding: 7px; }
+  .duo-mode .game-shell { grid-template-columns: minmax(0, 1fr) 164px; }
+  .duo-mode .command-deck { min-height: 0; padding: 7px; }
+  .duo-mode .deck-tools { display: flex; flex-direction: column; justify-content: center; gap: 7px; }
+  .duo-mode .player-controls { width: 100%; flex: 0 0 auto; grid-template-columns: minmax(0, 1fr) 44px; gap: 5px; padding: 6px; }
+  .duo-mode .player-meta { font-size: 10px; }
+  .duo-mode .player-meta > strong { font-size: 11px; }
+  .duo-mode .player-tag > span { font-size: 9px; }
+  .duo-mode .launch-button { width: 100%; min-height: 46px; flex-direction: row; padding: 6px 2px; gap: 3px; font-size: 14px; }
+  .duo-mode .launch-button > span:first-child { font-size: 19px; }
+  .duo-mode .bomb-button { width: 44px; min-height: 44px; padding: 4px 1px; gap: 2px; }
+  .duo-mode .bomb-button > span:nth-child(2) { display: none; }
+  .duo-mode .bomb-symbol { font-size: 19px; }
+  .duo-mode .inventory-count { min-width: 18px; height: 19px; padding: 0 2px; font-size: 10px; }
+  .duo-mode .finish-button { min-height: 44px; padding: 7px 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }

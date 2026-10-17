@@ -1,3 +1,5 @@
+import { readMatch, type GameMode, type MatchScore } from './modes.ts';
+
 export interface RunCheckpoint {
   levelIndex: number;
   wallet: number;
@@ -6,6 +8,7 @@ export interface RunCheckpoint {
   diamondBonus: boolean;
   totalEarned: number;
   seed?: number;
+  match?: MatchScore;
 }
 
 export interface ShopSave {
@@ -36,7 +39,9 @@ export const DEFAULT_SAVE: SaveData = {
   shop: null,
 };
 
-const STORAGE_KEY = 'gold-miner-save-v1';
+const STORAGE_KEYS: Record<GameMode, string> = {
+  solo: 'gold-miner-save-v1', coop: 'gold-miner-save-coop-v1', versus: 'gold-miner-save-versus-v1',
+};
 const MAX_MONEY = 1_000_000_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -70,6 +75,11 @@ function readRun(value: unknown): RunCheckpoint | null {
 
   // The generator uses a 32-bit seed. A damaged optional seed does not discard progress.
   if (isInteger(value.seed, 0, 0xffff_ffff)) run.seed = value.seed;
+  if (value.match !== undefined) {
+    const match = readMatch(value.match, run.levelIndex);
+    if (!match) return null;
+    run.match = match;
+  }
   return run;
 }
 
@@ -96,9 +106,9 @@ function readShop(value: unknown): ShopSave | null {
   };
 }
 
-function sanitize(value: unknown): SaveData {
+function sanitize(value: unknown, mode: GameMode = 'solo'): SaveData {
   if (!isRecord(value) || value.version !== 1) return { ...DEFAULT_SAVE };
-  return {
+  const data:SaveData = {
     version: 1,
     sound: typeof value.sound === 'boolean' ? value.sound : DEFAULT_SAVE.sound,
     bestEarned: isInteger(value.bestEarned, 0, MAX_MONEY) ? value.bestEarned : 0,
@@ -106,23 +116,29 @@ function sanitize(value: unknown): SaveData {
     checkpoint: readRun(value.checkpoint),
     shop: readShop(value.shop),
   };
+  if (mode === 'versus') {
+    data.shop = null;
+    const run = data.checkpoint;
+    if (run && (!run.match || run.totalEarned !== run.match.totals[0] + run.match.totals[1] || run.wallet !== run.totalEarned)) data.checkpoint = null;
+  }
+  return data;
 }
 
 /** Returns an independent, validated snapshot even when browser storage is unavailable. */
-export function loadSave(): SaveData {
+export function loadSave(mode: GameMode = 'solo'): SaveData {
   try {
-    const serialized = window.localStorage.getItem(STORAGE_KEY);
-    return serialized === null ? { ...DEFAULT_SAVE } : sanitize(JSON.parse(serialized) as unknown);
+    const serialized = window.localStorage.getItem(STORAGE_KEYS[mode]);
+    return serialized === null ? { ...DEFAULT_SAVE } : sanitize(JSON.parse(serialized) as unknown, mode);
   } catch {
     return { ...DEFAULT_SAVE };
   }
 }
 
 /** False means progress could not be persisted; callers can continue playing in memory. */
-export function saveGame(data: SaveData): boolean {
+export function saveGame(data: SaveData, mode: GameMode = 'solo'): boolean {
   try {
     if (!isRecord(data) || data.version !== 1) return false;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitize(data)));
+    window.localStorage.setItem(STORAGE_KEYS[mode], JSON.stringify(sanitize(data, mode)));
     return true;
   } catch {
     return false;

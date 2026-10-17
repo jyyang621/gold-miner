@@ -1,11 +1,29 @@
 import { MineEngine, type MineEvent, type RuntimeOre } from './engine.ts';
 import { LEVELS, type LevelDefinition } from './levels.ts';
-import { mineGeometry, WIDE_VIEWPORT, type MineViewport } from './viewport.ts';
+import { WIDE_VIEWPORT, type MineViewport } from './viewport.ts';
 
 interface Particle {x:number;y:number;vx:number;vy:number;life:number;max:number;color:string;size:number}
 interface Floater {x:number;y:number;text:string;life:number;color:string}
+interface MinerPalette {
+  rope:string; hook:string; hookPin:string;
+  overalls:string; overallsEdge:string; straps:string; sleeve:string;
+  hat:string; hatBrim:string; hatEdge:string; lamp:string; badge:string;
+}
 const TAU = Math.PI * 2;
 const font = '"Microsoft YaHei", "PingFang SC", sans-serif';
+const originalMiner:MinerPalette = {
+  rope:'#d9bd80',hook:'#d0c7a8',hookPin:'#e3d6ad',
+  overalls:'#687d76',overallsEdge:'#3c4f49',straps:'#a9baa0',sleeve:'#6d806f',
+  hat:'#c68c40',hatBrim:'#daaa55',hatEdge:'#76512b',lamp:'#ecda95',badge:'#76512b',
+};
+const duoMiners:MinerPalette[] = [
+  {...originalMiner,rope:'#f5c86b',hook:'#f3d18c',hookPin:'#fff0b3',
+    overalls:'#ae793a',overallsEdge:'#71502d',straps:'#ebca80',sleeve:'#b28649',
+    hat:'#d49b3c',hatBrim:'#edbc5c',hatEdge:'#785022',badge:'#805422'},
+  {...originalMiner,rope:'#8bd9c8',hook:'#a7e8da',hookPin:'#d5fff0',
+    overalls:'#408b83',overallsEdge:'#285b58',straps:'#a8d8c6',sleeve:'#4d978b',
+    hat:'#4d9c91',hatBrim:'#83c5af',hatEdge:'#2d655f',lamp:'#d7efbf',badge:'#285d58'},
+];
 
 export class MineRenderer {
   private ctx: CanvasRenderingContext2D;
@@ -94,9 +112,9 @@ export class MineRenderer {
       ctx.strokeStyle='#31211822';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x-10,y-8);ctx.lineTo(x,y);ctx.lineTo(x+17,y-2);ctx.moveTo(x,y);ctx.lineTo(x+4,y+12);ctx.stroke();
     }
     // Framed mining sign and corner rock beds.
-    ctx.save();ctx.translate(34,28);ctx.rotate(-.035);this.round(ctx,0,0,148,54,6,'#e9d8ac','#796345',2);
-    ctx.font=`700 11px ${font}`;ctx.letterSpacing='2px';ctx.fillStyle='#9b7240';ctx.fillText('GOLDEN VALLEY',13,19);
-    ctx.letterSpacing='0px';ctx.font=`700 18px ${font}`;ctx.fillStyle='#55402b';ctx.fillText(`第 ${String(level.id).padStart(2,'0')} 号矿场`,13,42);ctx.restore();
+    ctx.save();ctx.translate(34,portrait?22:28);ctx.rotate(-.035);this.round(ctx,0,0,148,portrait?42:54,6,'#e9d8ac','#796345',2);
+    ctx.font=`700 ${portrait?10:11}px ${font}`;ctx.letterSpacing=portrait?'1.5px':'2px';ctx.fillStyle='#9b7240';ctx.fillText('GOLDEN VALLEY',13,portrait?15:19);
+    ctx.letterSpacing='0px';ctx.font=`700 ${portrait?16:18}px ${font}`;ctx.fillStyle='#55402b';ctx.fillText(`第 ${String(level.id).padStart(2,'0')} 号矿场`,13,portrait?34:42);ctx.restore();
     ctx.strokeStyle=colors[3];ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,217);for(let x=0;x<width;x+=20)ctx.lineTo(x,214+Math.sin(x*.031)*5);ctx.stroke();
     ctx.fillStyle='#efd39d66';ctx.font=`12px ${font}`;ctx.fillText('GOLDEN VALLEY MINING CO.',34,height-25);
     ctx.textAlign='right';ctx.fillText('每一次下钩，都有新的发现',width-34,height-25);ctx.textAlign='left';
@@ -129,8 +147,8 @@ export class MineRenderer {
 
   event(event:MineEvent) {
     if(event.type==='coin') {
-      this.floaters.push({x:event.x,y:event.y-66,text:`+ ¥${event.value}`,life:1.35,color:'#fff4c2'});
-      this.burst(event.x,event.y-9,14,['#f6cc4c','#fff2b5','#cf8e25']);
+      this.floaters.push({x:event.x,y:event.y-66,text:`+ ¥${event.value}`,life:1.35,color:event.player===1?'#d6fff1':'#fff4c2'});
+      this.burst(event.x,event.y-9,14,event.player===1?['#8edac3','#e4fff1','#398c7d']:['#f6cc4c','#fff2b5','#cf8e25']);
     } else if(event.type==='bomb') {this.shake=.35;this.burst(event.x,event.y,40,['#f6bb52','#fee4a3','#42332b','#a85e32']);}
     else if(event.type==='grab'||event.type==='rock')this.burst(event.x,event.y,6,['#ebcf96','#fff0c1']);
     else if(event.type==='end'&&event.won)for(let i=0;i<5;i++)this.burst(event.x+(i-2)*this.viewport.width*225/1280,110,18,['#eac056','#f9edc3','#9eac72']);
@@ -142,7 +160,6 @@ export class MineRenderer {
   render(engine:MineEngine,time:number,dt:number,paused=false) {
     const ctx=this.ctx;
     const {width,height,portrait}=this.viewport;
-    const {pivotX,pivotY}=mineGeometry(engine.viewport);
     ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
     ctx.setTransform(this.canvas.width/width,0,0,this.canvas.height/height,0,0);ctx.save();
     this.shake=Math.max(0,this.shake-dt);
@@ -153,12 +170,23 @@ export class MineRenderer {
       ctx.fillStyle='#fff2bb18';ctx.beginPath();ctx.arc(x,y,1.5,0,TAU);ctx.fill();
     }
     for(const ore of engine.ores)if(!ore.removed&&!ore.held)this.drawOre(ctx,ore,ore.x,ore.y,time);
-    const {x,y}=engine.head;
-    ctx.strokeStyle='#3c3027';ctx.lineWidth=5;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(pivotX,pivotY);ctx.lineTo(x,y);ctx.stroke();
-    ctx.strokeStyle='#d9bd80';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(pivotX+1,pivotY);ctx.lineTo(x+1,y);ctx.stroke();
-    if(engine.held)this.drawOre(ctx,engine.held,x,y+engine.held.radius*.65,time);
-    this.drawHook(ctx,x,y,engine.angle,engine.phase==='loaded');
-    this.drawMiner(ctx,time,engine.phase!=='swing'&&!engine.ended,pivotX,pivotY);
+    const duo=engine.players.length===2;
+    // Shared ground objects are drawn once; each cable carries only its own ore.
+    for(const player of engine.players) {
+      const {pivotX,pivotY}=engine.playerGeometry(player.id);
+      const {x,y}=engine.playerHead(player.id);
+      const palette=duo?duoMiners[player.id]:originalMiner;
+      ctx.strokeStyle='#3c3027';ctx.lineWidth=5;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(pivotX,pivotY);ctx.lineTo(x,y);ctx.stroke();
+      ctx.strokeStyle=palette.rope;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(pivotX+1,pivotY);ctx.lineTo(x+1,y);ctx.stroke();
+      if(player.held)this.drawOre(ctx,player.held,x,y+player.held.radius*.65,time);
+      this.drawHook(ctx,x,y,player.angle,player.phase==='loaded',palette);
+    }
+    for(const player of engine.players) {
+      const {pivotX,pivotY}=engine.playerGeometry(player.id);
+      const palette=duo?duoMiners[player.id]:originalMiner;
+      this.drawMiner(ctx,time,player.phase!=='swing'&&!engine.ended,pivotX,pivotY,palette);
+      if(duo)this.drawPlayerBadge(ctx,pivotX,pivotY,player.id,palette);
+    }
     for(const p of this.particles){if(!paused){p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=250*dt;}ctx.globalAlpha=Math.max(0,Math.min(1,p.life*2));ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,p.size,p.size);}
     ctx.globalAlpha=1;this.particles=this.particles.filter(p=>p.life>0);
     for(const f of this.floaters){if(!paused){f.life-=dt;f.y-=28*dt;}ctx.globalAlpha=Math.min(1,f.life*2);ctx.textAlign='center';ctx.font=`900 26px ${font}`;ctx.lineWidth=4;ctx.strokeStyle='#634023';ctx.strokeText(f.text,f.x,f.y);ctx.fillStyle=f.color;ctx.fillText(f.text,f.x,f.y);}
@@ -203,11 +231,20 @@ export class MineRenderer {
   private star(ctx:CanvasRenderingContext2D,x:number,y:number,r:number,color:string) {
     ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(x,y-r);ctx.lineTo(x+r*.22,y-r*.22);ctx.lineTo(x+r,y);ctx.lineTo(x+r*.22,y+r*.22);ctx.lineTo(x,y+r);ctx.lineTo(x-r*.22,y+r*.22);ctx.lineTo(x-r,y);ctx.lineTo(x-r*.22,y-r*.22);ctx.closePath();ctx.fill();
   }
-  private drawHook(ctx:CanvasRenderingContext2D,x:number,y:number,angle:number,closed:boolean) {
+  private drawHook(ctx:CanvasRenderingContext2D,x:number,y:number,angle:number,closed:boolean,palette:MinerPalette) {
     ctx.save();ctx.translate(x,y);ctx.rotate(-angle);ctx.strokeStyle='#443a2b';ctx.lineWidth=7;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(0,3);ctx.moveTo(0,0);ctx.lineTo(closed?-10:-15,8);ctx.lineTo(closed?-7:-12,19);ctx.moveTo(0,0);ctx.lineTo(closed?10:15,8);ctx.lineTo(closed?7:12,19);ctx.stroke();
-    ctx.strokeStyle='#d0c7a8';ctx.lineWidth=3;ctx.stroke();ctx.fillStyle='#e3d6ad';ctx.beginPath();ctx.arc(0,0,4,0,TAU);ctx.fill();ctx.restore();
+    ctx.strokeStyle=palette.hook;ctx.lineWidth=3;ctx.stroke();ctx.fillStyle=palette.hookPin;ctx.beginPath();ctx.arc(0,0,4,0,TAU);ctx.fill();ctx.restore();
   }
-  private drawMiner(ctx:CanvasRenderingContext2D,t:number,working:boolean,pivotX:number,pivotY:number) {
+  private drawPlayerBadge(ctx:CanvasRenderingContext2D,pivotX:number,pivotY:number,id:number,palette:MinerPalette) {
+    ctx.save();
+    const x=pivotX+30,y=pivotY-79;
+    const width=this.viewport.portrait?64:46,height=this.viewport.portrait?36:27;
+    this.round(ctx,x,y,width,height,height/2,palette.badge,'#f9edd1',2);
+    ctx.fillStyle='#fff7df';ctx.font=`800 ${this.viewport.portrait?24:15}px ${font}`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(`P${id+1}`,x+width/2,y+height/2+1);
+    ctx.restore();
+  }
+  private drawMiner(ctx:CanvasRenderingContext2D,t:number,working:boolean,pivotX:number,pivotY:number,palette:MinerPalette) {
     ctx.save();ctx.translate(pivotX-20,pivotY-12);
     const bob=working?Math.sin(t*12)*1.5:Math.sin(t*2)*.7;
     // Timber stand and crank.
@@ -220,18 +257,18 @@ export class MineRenderer {
     ctx.translate(-28,bob);
     // Boots, overalls, shoulders.
     this.round(ctx,-21,22,19,13,5,'#493c2c');this.round(ctx,5,22,20,13,5,'#493c2c');
-    this.round(ctx,-23,-12,47,39,10,'#687d76','#3c4f49',2.5);
-    this.round(ctx,-13,-14,6,26,2,'#a9baa0');this.round(ctx,10,-14,6,26,2,'#a9baa0');
+    this.round(ctx,-23,-12,47,39,10,palette.overalls,palette.overallsEdge,2.5);
+    this.round(ctx,-13,-14,6,26,2,palette.straps);this.round(ctx,10,-14,6,26,2,palette.straps);
     ctx.fillStyle='#e7ca82';ctx.beginPath();ctx.arc(-10,0,2,0,TAU);ctx.arc(13,0,2,0,TAU);ctx.fill();
-    ctx.strokeStyle='#6d806f';ctx.lineWidth=14;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(22,-5);ctx.lineTo(37,8+(working?Math.sin(t*8)*3:0));ctx.stroke();ctx.fillStyle='#dfaf74';ctx.beginPath();ctx.arc(38,8+(working?Math.sin(t*8)*3:0),7,0,TAU);ctx.fill();
+    ctx.strokeStyle=palette.sleeve;ctx.lineWidth=14;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(22,-5);ctx.lineTo(37,8+(working?Math.sin(t*8)*3:0));ctx.stroke();ctx.fillStyle='#dfaf74';ctx.beginPath();ctx.arc(38,8+(working?Math.sin(t*8)*3:0),7,0,TAU);ctx.fill();
     // Face, big beard and hat.
     ctx.fillStyle='#e2b77e';ctx.strokeStyle='#705337';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,-31,25,27,0,0,TAU);ctx.fill();ctx.stroke();
     ctx.fillStyle='#f0e4c5';ctx.beginPath();ctx.moveTo(-24,-27);ctx.quadraticCurveTo(-22,6,0,9);ctx.quadraticCurveTo(26,-1,25,-27);ctx.quadraticCurveTo(0,-8,-24,-27);ctx.fill();
     ctx.fillStyle='#c78d57';ctx.beginPath();ctx.ellipse(1,-24,9,7,0,0,TAU);ctx.fill();
     ctx.fillStyle='#3a392c';ctx.beginPath();ctx.arc(-9,-37,2.5,0,TAU);ctx.arc(11,-37,2.5,0,TAU);ctx.fill();
     ctx.strokeStyle='#f5ecd0';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-15,-43);ctx.lineTo(-5,-44);ctx.moveTo(7,-44);ctx.lineTo(17,-42);ctx.stroke();
-    this.round(ctx,-24,-65,48,23,10,'#c68c40','#76512b',2.5);this.round(ctx,-34,-49,69,10,4,'#daaa55','#76512b',2.5);
-    this.round(ctx,-8,-63,17,13,5,'#ecda95','#866836',2);ctx.fillStyle='#fff4bd';ctx.beginPath();ctx.arc(0,-57,4,0,TAU);ctx.fill();
+    this.round(ctx,-24,-65,48,23,10,palette.hat,palette.hatEdge,2.5);this.round(ctx,-34,-49,69,10,4,palette.hatBrim,palette.hatEdge,2.5);
+    this.round(ctx,-8,-63,17,13,5,palette.lamp,'#866836',2);ctx.fillStyle='#fff4bd';ctx.beginPath();ctx.arc(0,-57,4,0,TAU);ctx.fill();
     ctx.restore();
   }
 }

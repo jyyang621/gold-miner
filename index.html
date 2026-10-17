@@ -31,13 +31,13 @@
         <section class="status-strip" aria-label="本关状态">
           <div class="level-display">
             <span class="level-stamp" aria-hidden="true">矿</span>
-            <div><span class="hud-label">第 <strong id="level-number">01</strong> / 20 关</span><strong id="level-name" class="level-name">初入金矿</strong></div>
+            <div><span class="hud-label">第 <strong id="level-number">01</strong> <span id="level-unit">/ 20 关</span></span><strong id="level-name" class="level-name">初入金矿</strong></div>
           </div>
           <div class="goal-display">
-            <div class="goal-numbers"><span class="hud-label">本关收入 <strong id="income-value" class="income-number">¥ 0</strong></span><span class="target-number">目标 <strong id="target-value">¥ 500</strong></span></div>
+            <div class="goal-numbers"><span class="hud-label"><span id="income-label">本关收入</span> <strong id="income-value" class="income-number">¥ 0</strong></span><span class="target-number"><span id="target-label">目标</span> <strong id="target-value">¥ 500</strong></span></div>
             <div class="goal-track" role="progressbar" aria-label="关卡目标进度"><span id="goal-fill" style="width: 0%"></span></div>
           </div>
-          <div class="wallet-display"><span class="coin-icon" aria-hidden="true">¥</span><div><span class="hud-label">我的钱包</span><strong id="wallet-value">¥ 0</strong></div></div>
+          <div class="wallet-display"><span class="coin-icon" aria-hidden="true">¥</span><div><span id="wallet-label" class="hud-label">我的钱包</span><strong id="wallet-value">¥ 0</strong></div></div>
           <div class="time-display"><span class="clock-icon" aria-hidden="true"></span><div><span class="hud-label">剩余时间</span><strong id="time-value">60<span class="time-unit">s</span></strong></div></div>
         </section>
 
@@ -51,15 +51,23 @@
         <section class="command-deck" aria-label="操作与道具">
           <div class="keyboard-hints"><span><kbd class="wide-key">SPACE</kbd> / <kbd>↓</kbd> 放下抓钩</span><span><kbd>B</kbd> 使用炸药</span><span><kbd>P</kbd> 暂停</span></div>
           <div class="deck-tools">
-            <button id="launch-btn" class="launch-button" type="button" disabled><span aria-hidden="true">↓</span><span>下钩</span></button>
             <div class="buff-display"><span class="hud-label">本关加成</span><strong id="buff-label">暂无加成</strong></div>
-            <button id="bomb-btn" class="bomb-button" type="button" title="使用炸药（B）"><span class="bomb-symbol" aria-hidden="true">✹</span><span>炸药</span><span id="bag-count" class="inventory-count">0</span></button>
+            <div id="player-one-controls" class="player-controls player-one" aria-label="玩家一操作区">
+              <div class="player-meta duo-only"><span class="player-tag">P1 <span>金队</span></span><strong id="player-one-income">¥ 0</strong></div>
+              <button id="launch-btn" class="launch-button" type="button" disabled><span aria-hidden="true">↓</span><span>下钩</span></button>
+              <button id="bomb-btn" class="bomb-button" type="button" aria-label="使用炸药" title="使用炸药（B）"><span class="bomb-symbol" aria-hidden="true">✹</span><span>炸药</span><span id="bag-count" class="inventory-count">0</span></button>
+            </div>
+            <div id="player-two-controls" class="player-controls player-two hidden" aria-label="玩家二操作区">
+              <div class="player-meta duo-only"><span class="player-tag">P2 <span>青队</span></span><strong id="player-two-income">¥ 0</strong></div>
+              <button id="launch-two-btn" class="launch-button" type="button" disabled><span aria-hidden="true">↓</span><span>P2 下钩</span></button>
+              <button id="bomb-two-btn" class="bomb-button" type="button" aria-label="玩家二使用炸药" title="玩家二使用炸药"><span class="bomb-symbol" aria-hidden="true">✹</span><span>炸药</span><span id="bag-count-two" class="inventory-count">0</span></button>
+            </div>
             <button id="finish-btn" class="finish-button" type="button" disabled>收工结算 <span aria-hidden="true">↗</span></button>
           </div>
         </section>
       </main>
 
-      <footer class="page-footer"><span><i aria-hidden="true"></i> 20 关矿场冒险 · 进度自动保存</span><span class="footer-motto">每一钩，都有好收获 <span aria-hidden="true">✦</span></span><span>空格下钩 · 点击矿区也可以</span></footer>
+      <footer class="page-footer"><span><i aria-hidden="true"></i> 20 关矿场冒险 · 进度自动保存</span><span class="footer-motto">每一钩，都有好收获 <span aria-hidden="true">✦</span></span><span id="footer-controls">空格下钩 · 点击矿区也可以</span></footer>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
