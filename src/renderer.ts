@@ -12,15 +12,15 @@ interface MinerPalette {
 const TAU = Math.PI * 2;
 const font = '"Microsoft YaHei", "PingFang SC", sans-serif';
 const originalMiner:MinerPalette = {
-  rope:'#d9bd80',hook:'#d0c7a8',hookPin:'#e3d6ad',
+  rope:'#ffe064',hook:'#ffe58b',hookPin:'#fffbe3',
   overalls:'#687d76',overallsEdge:'#3c4f49',straps:'#a9baa0',sleeve:'#6d806f',
   hat:'#c68c40',hatBrim:'#daaa55',hatEdge:'#76512b',lamp:'#ecda95',badge:'#76512b',
 };
 const duoMiners:MinerPalette[] = [
-  {...originalMiner,rope:'#f5c86b',hook:'#f3d18c',hookPin:'#fff0b3',
+  {...originalMiner,rope:'#ffd34b',hook:'#ffe17a',hookPin:'#fff9d7',
     overalls:'#ae793a',overallsEdge:'#71502d',straps:'#ebca80',sleeve:'#b28649',
     hat:'#d49b3c',hatBrim:'#edbc5c',hatEdge:'#785022',badge:'#805422'},
-  {...originalMiner,rope:'#8bd9c8',hook:'#a7e8da',hookPin:'#d5fff0',
+  {...originalMiner,rope:'#55f4db',hook:'#7dffe7',hookPin:'#edfffb',
     overalls:'#408b83',overallsEdge:'#285b58',straps:'#a8d8c6',sleeve:'#4d978b',
     hat:'#4d9c91',hatBrim:'#83c5af',hatEdge:'#2d655f',lamp:'#d7efbf',badge:'#285d58'},
 ];
@@ -33,6 +33,7 @@ export class MineRenderer {
   private level: LevelDefinition = LEVELS[0];
   private viewport: MineViewport = {...WIDE_VIEWPORT};
   private pixelScale = 1;
+  private displayScale = 1;
   private shake = 0;
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -42,6 +43,8 @@ export class MineRenderer {
 
   /** Keep drawing in world coordinates while matching the display's pixel density. */
   resize(view: MineViewport, pixelScale: number) {
+    const bounds = this.canvas.getBoundingClientRect();
+    this.displayScale = bounds.width > 0 && bounds.height > 0 ? Math.min(bounds.width / view.width, bounds.height / view.height) : 1;
     const scale = Number.isFinite(pixelScale) && pixelScale > 0 ? pixelScale : 1;
     const width = Math.max(1, Math.round(view.width * scale));
     const height = Math.max(1, Math.round(view.height * scale));
@@ -176,16 +179,24 @@ export class MineRenderer {
       const {pivotX,pivotY}=engine.playerGeometry(player.id);
       const {x,y}=engine.playerHead(player.id);
       const palette=duo?duoMiners[player.id]:originalMiner;
-      ctx.strokeStyle='#3c3027';ctx.lineWidth=5;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(pivotX,pivotY);ctx.lineTo(x,y);ctx.stroke();
-      ctx.strokeStyle=palette.rope;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(pivotX+1,pivotY);ctx.lineTo(x+1,y);ctx.stroke();
+      this.drawCable(ctx,pivotX,pivotY,x,y,palette,duo&&player.id===1);
       if(player.held)this.drawOre(ctx,player.held,x,y+player.held.radius*.65,time);
-      this.drawHook(ctx,x,y,player.angle,player.phase==='loaded',palette);
     }
     for(const player of engine.players) {
       const {pivotX,pivotY}=engine.playerGeometry(player.id);
       const palette=duo?duoMiners[player.id]:originalMiner;
       this.drawMiner(ctx,time,player.phase!=='swing'&&!engine.ended,pivotX,pivotY,palette);
       if(duo)this.drawPlayerBadge(ctx,pivotX,pivotY,player.id,palette);
+    }
+    // Hooks stay in front of the timber platform, including when idle near the winch.
+    for(const player of engine.players) {
+      const {x,y}=engine.playerHead(player.id);
+      const palette=duo?duoMiners[player.id]:originalMiner;
+      this.drawHook(ctx,x,y,player.angle,player.phase==='loaded',palette);
+    }
+    if(duo)for(const player of engine.players)if(player.phase!=='swing') {
+      const {x,y}=engine.playerHead(player.id);
+      this.drawHookLabel(ctx,x,y,player.id,duoMiners[player.id]);
     }
     for(const p of this.particles){if(!paused){p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=250*dt;}ctx.globalAlpha=Math.max(0,Math.min(1,p.life*2));ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,p.size,p.size);}
     ctx.globalAlpha=1;this.particles=this.particles.filter(p=>p.life>0);
@@ -231,9 +242,49 @@ export class MineRenderer {
   private star(ctx:CanvasRenderingContext2D,x:number,y:number,r:number,color:string) {
     ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(x,y-r);ctx.lineTo(x+r*.22,y-r*.22);ctx.lineTo(x+r,y);ctx.lineTo(x+r*.22,y+r*.22);ctx.lineTo(x,y+r);ctx.lineTo(x-r*.22,y+r*.22);ctx.lineTo(x-r,y);ctx.lineTo(x-r*.22,y-r*.22);ctx.closePath();ctx.fill();
   }
+  private drawCable(ctx:CanvasRenderingContext2D,px:number,py:number,x:number,y:number,palette:MinerPalette,striped:boolean) {
+    const unit=1/this.displayScale;
+    ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+    ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(x,y);
+    ctx.strokeStyle='#fff8e9e6';ctx.lineWidth=Math.max(8,6*unit);ctx.stroke();
+    ctx.strokeStyle='#203135';ctx.lineWidth=Math.max(6,4.5*unit);ctx.stroke();
+    ctx.strokeStyle=palette.rope;ctx.lineWidth=Math.max(3.5,2.5*unit);ctx.stroke();
+    if(striped) {
+      ctx.setLineDash([4*unit,8*unit]);ctx.strokeStyle='#f3fffb';ctx.lineWidth=unit;ctx.stroke();
+    }
+    ctx.restore();
+  }
   private drawHook(ctx:CanvasRenderingContext2D,x:number,y:number,angle:number,closed:boolean,palette:MinerPalette) {
-    ctx.save();ctx.translate(x,y);ctx.rotate(-angle);ctx.strokeStyle='#443a2b';ctx.lineWidth=7;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(0,3);ctx.moveTo(0,0);ctx.lineTo(closed?-10:-15,8);ctx.lineTo(closed?-7:-12,19);ctx.moveTo(0,0);ctx.lineTo(closed?10:15,8);ctx.lineTo(closed?7:12,19);ctx.stroke();
-    ctx.strokeStyle=palette.hook;ctx.lineWidth=3;ctx.stroke();ctx.fillStyle=palette.hookPin;ctx.beginPath();ctx.arc(0,0,4,0,TAU);ctx.fill();ctx.restore();
+    // Size follows CSS pixels, independently of DPR and the mine's world size.
+    const size=Math.max(1.15,.8/this.displayScale);
+    ctx.save();ctx.translate(x,y);ctx.rotate(-angle);ctx.scale(size,size);
+    ctx.lineCap='round';ctx.lineJoin='round';
+    ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(0,3);
+    ctx.moveTo(0,0);ctx.lineTo(closed?-10:-15,8);ctx.lineTo(closed?-7:-12,19);
+    ctx.moveTo(0,0);ctx.lineTo(closed?10:15,8);ctx.lineTo(closed?7:12,19);
+    ctx.strokeStyle='#fffbea';ctx.lineWidth=11;ctx.stroke();
+    ctx.strokeStyle='#203135';ctx.lineWidth=8;ctx.stroke();
+    ctx.strokeStyle=palette.hook;ctx.lineWidth=4.5;ctx.stroke();
+    ctx.fillStyle=palette.hookPin;ctx.strokeStyle='#203135';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(0,0,5,0,TAU);ctx.fill();ctx.stroke();
+    ctx.fillStyle=palette.rope;ctx.beginPath();ctx.arc(0,0,2,0,TAU);ctx.fill();
+    ctx.restore();
+  }
+  private drawHookLabel(ctx:CanvasRenderingContext2D,x:number,y:number,id:number,palette:MinerPalette) {
+    const unit=1/this.displayScale,w=28*unit,h=17*unit,gap=13*unit;
+    const margin=2*unit;
+    let left=id===0?x-gap-w:x+gap;
+    if(left<margin||left+w>this.viewport.width-margin)left=id===0?x+gap:x-gap-w;
+    left=Math.max(margin,Math.min(this.viewport.width-w-margin,left));
+    const top=Math.max(2*unit,Math.min(this.viewport.height-h-2*unit,y-h-8*unit));
+    ctx.save();
+    ctx.beginPath();ctx.moveTo(x,y-3*unit);ctx.lineTo(left+(left<x?w:0),top+h);
+    ctx.strokeStyle='#203135';ctx.lineWidth=3*unit;ctx.stroke();
+    ctx.strokeStyle=palette.rope;ctx.lineWidth=1.5*unit;ctx.stroke();
+    this.round(ctx,left,top,w,h,5*unit,palette.badge,'#fffbea',1.5*unit);
+    ctx.fillStyle='#ffffff';ctx.font=`900 ${11*unit}px ${font}`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(`P${id+1}`,left+w/2,top+h/2+.5*unit);
+    ctx.restore();
   }
   private drawPlayerBadge(ctx:CanvasRenderingContext2D,pivotX:number,pivotY:number,id:number,palette:MinerPalette) {
     ctx.save();
