@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#30291f" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23362c20'/%3E%3Cpath d='m17 48 31-31M17 16l31 33M29 13c13-4 23-2 28 10-10-3-16-2-22 4z' fill='%23efb93d' stroke='%23efb93d' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <meta name="description" content="黄金矿工：抓准时机，满载而归。20 关原创卡通矿场冒险。" />
+    <title>黄金矿工 · 满载而归</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="masthead">
+        <button id="home-btn" class="brand" type="button" aria-label="返回黄金矿工主菜单">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none"><path d="m13 36 23-23M13 12l23 25" stroke="currentColor" stroke-width="5" stroke-linecap="round"/><path d="M23 9c9-3 16-1 19 7-7-2-11-1-15 3L23 9ZM6 17C9 9 16 7 25 10l-4 10c-4-4-8-5-15-3Z" fill="currentColor" stroke="#483422" stroke-width="1.5"/></svg>
+          </span>
+          <span class="brand-wordmark"><strong>黄金矿工<span class="brand-dot">.</span></strong><small>GOLD MINER · 满载而归</small></span>
+        </button>
+        <div class="masthead-note"><span class="tiny-star">✦</span> 看准时机，下钩捞金 <span class="tiny-star">✦</span></div>
+        <nav class="header-actions" aria-label="游戏设置">
+          <button id="sound-btn" class="utility-button" type="button" aria-label="切换声音" title="切换声音"><span aria-hidden="true">♫</span><span>声音开启</span></button>
+          <button id="help-btn" class="utility-button" type="button" aria-label="游戏玩法" title="游戏玩法"><span class="question-mark" aria-hidden="true">?</span><span>玩法</span></button>
+          <button id="pause-btn" class="utility-button pause-button" type="button" title="暂停游戏（Esc / P）"><span aria-hidden="true">Ⅱ</span><span>暂停</span></button>
+        </nav>
+      </header>
+
+      <main class="game-shell" aria-label="黄金矿工游戏">
+        <section class="status-strip" aria-label="本关状态">
+          <div class="level-display">
+            <span class="level-stamp" aria-hidden="true">矿</span>
+            <div><span class="hud-label">第 <strong id="level-number">01</strong> / 20 关</span><strong id="level-name" class="level-name">初入金矿</strong></div>
+          </div>
+          <div class="goal-display">
+            <div class="goal-numbers"><span class="hud-label">本关收入 <strong id="income-value" class="income-number">¥ 0</strong></span><span class="target-number">目标 <strong id="target-value">¥ 500</strong></span></div>
+            <div class="goal-track" role="progressbar" aria-label="关卡目标进度"><span id="goal-fill" style="width: 0%"></span></div>
+          </div>
+          <div class="wallet-display"><span class="coin-icon" aria-hidden="true">¥</span><div><span class="hud-label">我的钱包</span><strong id="wallet-value">¥ 0</strong></div></div>
+          <div class="time-display"><span class="clock-icon" aria-hidden="true"></span><div><span class="hud-label">剩余时间</span><strong id="time-value">60<span class="time-unit">s</span></strong></div></div>
+        </section>
+
+        <section class="game-stage stage" aria-label="挖矿区域">
+          <canvas id="game-canvas" width="1280" height="720" tabindex="0" aria-label="挖矿画布，按空格或向下方向键发射抓钩，按向上方向键或 B 使用炸药。">你的浏览器需要支持 Canvas 才能运行黄金矿工。</canvas>
+          <div id="overlay" class="overlay"><div id="modal-content" class="modal-panel" aria-live="polite"></div></div>
+          <div id="toast" class="toast" role="status" aria-live="polite"></div>
+          <span class="frame-rivet rivet-tl" aria-hidden="true"></span><span class="frame-rivet rivet-tr" aria-hidden="true"></span><span class="frame-rivet rivet-bl" aria-hidden="true"></span><span class="frame-rivet rivet-br" aria-hidden="true"></span>
+        </section>
+
+        <section class="command-deck" aria-label="操作与道具">
+          <div class="keyboard-hints"><span><kbd class="wide-key">SPACE</kbd> / <kbd>↓</kbd> 放下抓钩</span><span><kbd>B</kbd> 使用炸药</span><span><kbd>P</kbd> 暂停</span></div>
+          <div class="deck-tools">
+            <div class="buff-display"><span class="hud-label">本关加成</span><strong id="buff-label">暂无加成</strong></div>
+            <button id="bomb-btn" class="bomb-button" type="button" title="使用炸药（B）"><span class="bomb-symbol" aria-hidden="true">✹</span><span>炸药</span><span id="bag-count" class="inventory-count">0</span></button>
+            <button id="finish-btn" class="finish-button" type="button" disabled>收工结算 <span aria-hidden="true">↗</span></button>
+          </div>
+        </section>
+      </main>
+
+      <footer class="page-footer"><span><i aria-hidden="true"></i> 20 关矿场冒险 · 进度自动保存</span><span class="footer-motto">每一钩，都有好收获 <span aria-hidden="true">✦</span></span><span>空格下钩 · 点击矿区也可以</span></footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
