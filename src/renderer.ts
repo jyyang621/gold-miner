@@ -4,6 +4,7 @@ import { WIDE_VIEWPORT, type MineViewport } from './viewport.ts';
 
 interface Particle {x:number;y:number;vx:number;vy:number;life:number;max:number;color:string;size:number}
 interface Floater {x:number;y:number;text:string;life:number;color:string}
+interface HookLabelBounds {left:number;top:number;width:number;height:number}
 interface MinerPalette {
   rope:string; hook:string; hookPin:string;
   overalls:string; overallsEdge:string; straps:string; sleeve:string;
@@ -194,9 +195,10 @@ export class MineRenderer {
       const palette=duo?duoMiners[player.id]:originalMiner;
       this.drawHook(ctx,x,y,player.angle,player.phase==='loaded',palette);
     }
+    let previousLabel:HookLabelBounds|undefined;
     if(duo)for(const player of engine.players)if(player.phase!=='swing') {
       const {x,y}=engine.playerHead(player.id);
-      this.drawHookLabel(ctx,x,y,player.id,duoMiners[player.id]);
+      previousLabel=this.drawHookLabel(ctx,x,y,player.id,duoMiners[player.id],previousLabel);
     }
     for(const p of this.particles){if(!paused){p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=250*dt;}ctx.globalAlpha=Math.max(0,Math.min(1,p.life*2));ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,p.size,p.size);}
     ctx.globalAlpha=1;this.particles=this.particles.filter(p=>p.life>0);
@@ -270,21 +272,27 @@ export class MineRenderer {
     ctx.fillStyle=palette.rope;ctx.beginPath();ctx.arc(0,0,2,0,TAU);ctx.fill();
     ctx.restore();
   }
-  private drawHookLabel(ctx:CanvasRenderingContext2D,x:number,y:number,id:number,palette:MinerPalette) {
+  private drawHookLabel(ctx:CanvasRenderingContext2D,x:number,y:number,id:number,palette:MinerPalette,avoid?:HookLabelBounds):HookLabelBounds {
     const unit=1/this.displayScale,w=28*unit,h=17*unit,gap=13*unit;
     const margin=2*unit;
     let left=id===0?x-gap-w:x+gap;
     if(left<margin||left+w>this.viewport.width-margin)left=id===0?x+gap:x-gap-w;
     left=Math.max(margin,Math.min(this.viewport.width-w-margin,left));
-    const top=Math.max(2*unit,Math.min(this.viewport.height-h-2*unit,y-h-8*unit));
+    let top=Math.max(margin,Math.min(this.viewport.height-h-margin,y-h-8*unit));
+    if(avoid&&left<avoid.left+avoid.width+margin&&left+w+margin>avoid.left&&
+       top<avoid.top+avoid.height+margin&&top+h+margin>avoid.top) {
+      const above=avoid.top-h-4*unit;
+      top=above>=margin?above:Math.min(this.viewport.height-h-margin,avoid.top+avoid.height+4*unit);
+    }
     ctx.save();
-    ctx.beginPath();ctx.moveTo(x,y-3*unit);ctx.lineTo(left+(left<x?w:0),top+h);
+    ctx.beginPath();ctx.moveTo(x,y-3*unit);ctx.lineTo(left+(left<x?w:0),top>y?top:top+h);
     ctx.strokeStyle='#203135';ctx.lineWidth=3*unit;ctx.stroke();
     ctx.strokeStyle=palette.rope;ctx.lineWidth=1.5*unit;ctx.stroke();
     this.round(ctx,left,top,w,h,5*unit,palette.badge,'#fffbea',1.5*unit);
     ctx.fillStyle='#ffffff';ctx.font=`900 ${11*unit}px ${font}`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillText(`P${id+1}`,left+w/2,top+h/2+.5*unit);
     ctx.restore();
+    return {left,top,width:w,height:h};
   }
   private drawPlayerBadge(ctx:CanvasRenderingContext2D,pivotX:number,pivotY:number,id:number,palette:MinerPalette) {
     ctx.save();
